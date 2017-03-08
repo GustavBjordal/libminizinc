@@ -228,12 +228,20 @@ namespace MiniZinc {
   void EnvI::pop_expr_map(){
     exprMap.pop_back();
   }
+  bool is_a_lit(Expression* e){
+    return e->isa<ArrayLit>()||
+      e->isa<IntLit>() ||
+      e->isa<SetLit>() ||
+      e->isa<BoolLit>() ||
+      e->isa<StringLit>();
+  }
   void EnvI::map_insert(Expression* e, const EE& ee) {
-      std::cerr << *e << " >> " << *ee.r() << std::endl;
       KeepAlive ka(e);
-      if(Id* id = e->dyn_cast<Id>()){
+      if(e->isa<Id>() || is_a_lit(e) ){
+        std::cerr << "Varmap: " << *e << " >> " << *ee.r() << std::endl;
         varsMap.back().insert(ka,WW(ee.r(),ee.b()));
       }else{
+        std::cerr << "Exprmap: "<< *e << " >> " << *ee.r() << std::endl;
         exprMap.back().insert(ka,WW(ee.r(),ee.b()));
       }
 
@@ -241,7 +249,7 @@ namespace MiniZinc {
 
   EnvI::Map::iterator EnvI::map_find(Expression* e) {
     KeepAlive ka(e);
-    Map& map = e->isa<Id>() ? varsMap.back() : exprMap.back();
+    Map& map = (e->isa<Id>() || is_a_lit(e)) ? varsMap.back() : exprMap.back();
 
     Map::iterator it = map.find(ka);
     if (it != map.end()) {
@@ -257,9 +265,10 @@ namespace MiniZinc {
     }
     return it;
   }
+
   void EnvI::map_remove(Expression* e) {
     KeepAlive ka(e);
-    if(Id* id = e->dyn_cast<Id>()) {
+    if(e->isa<Id>() || is_a_lit(e)){
       varsMap.back().remove(ka);
     }else{
       exprMap.back().remove(ka);
