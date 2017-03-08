@@ -88,7 +88,9 @@ namespace MiniZinc {
     int in_redundant_constraint;
     int in_maybe_partial;
   protected:
-    Map map;
+    //Map map;
+    std::vector<Map> varsMap;
+    std::vector<Map> exprMap;
     Model* _flat;
     bool _failed;
     unsigned int ids;
@@ -103,10 +105,15 @@ namespace MiniZinc {
     EnvI(Model* orig0);
     ~EnvI(void);
     long long int genId(void);
+    void push_vars_map();
+    void pop_vars_map();
+    void push_expr_map();
+    void pop_expr_map();
     void map_insert(Expression* e, const EE& ee);
     Map::iterator map_find(Expression* e);
     void map_remove(Expression* e);
-    Map::iterator map_end(void);
+    Map::iterator map_endI;
+    Map::iterator map_end();
     void dump(void);
     
     unsigned int registerEnum(VarDeclI* vdi);

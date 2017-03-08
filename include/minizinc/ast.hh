@@ -1464,6 +1464,7 @@ namespace MiniZinc {
         ASTString is_introduced;
         Id* user_cut;            // MIP
         Id* lazy_constraint;            // MIP
+        Id* new_constraint_context;
       } ann;
 
       /// Command line options

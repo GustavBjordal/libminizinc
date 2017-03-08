@@ -203,6 +203,9 @@ namespace MiniZinc {
     reifyMap.insert(std::pair<ASTString,ASTString>(constants().ids.bool_eq,constants().ids.bool_eq_reif));
     reifyMap.insert(std::pair<ASTString,ASTString>(constants().ids.bool_clause,constants().ids.bool_clause_reif));
     reifyMap.insert(std::pair<ASTString,ASTString>(constants().ids.clause,constants().ids.bool_clause_reif));
+
+    push_expr_map();
+    push_vars_map();
   }
   EnvI::~EnvI(void) {
     delete _flat;
@@ -212,32 +215,58 @@ namespace MiniZinc {
   EnvI::genId(void) {
       return ids++;
     }
+
+  void EnvI::push_vars_map(){
+    varsMap.push_back(Map());
+  }
+  void EnvI::pop_vars_map(){
+    varsMap.pop_back();
+  }
+  void EnvI::push_expr_map(){
+    exprMap.push_back(Map());
+  }
+  void EnvI::pop_expr_map(){
+    exprMap.pop_back();
+  }
   void EnvI::map_insert(Expression* e, const EE& ee) {
+      std::cerr << *e << " >> " << *ee.r() << std::endl;
       KeepAlive ka(e);
-      map.insert(ka,WW(ee.r(),ee.b()));
+      if(Id* id = e->dyn_cast<Id>()){
+        varsMap.back().insert(ka,WW(ee.r(),ee.b()));
+      }else{
+        exprMap.back().insert(ka,WW(ee.r(),ee.b()));
+      }
+
     }
+
   EnvI::Map::iterator EnvI::map_find(Expression* e) {
     KeepAlive ka(e);
+    Map& map = e->isa<Id>() ? varsMap.back() : exprMap.back();
+
     Map::iterator it = map.find(ka);
     if (it != map.end()) {
       if (it->second.r()) {
         if (it->second.r()->isa<VarDecl>()) {
           int idx = vo.find(it->second.r()->cast<VarDecl>());
           if (idx == -1 || (*_flat)[idx]->removed())
-            return map.end();
+            return map_endI;
         }
       } else {
-        return map.end();
+        return map_endI;
       }
     }
     return it;
   }
   void EnvI::map_remove(Expression* e) {
     KeepAlive ka(e);
-    map.remove(ka);
+    if(Id* id = e->dyn_cast<Id>()) {
+      varsMap.back().remove(ka);
+    }else{
+      exprMap.back().remove(ka);
+    }
   }
   EnvI::Map::iterator EnvI::map_end(void) {
-    return map.end();
+    return map_endI;
   }
   void EnvI::dump(void) {
     struct EED {
@@ -247,7 +276,9 @@ namespace MiniZinc {
         return oss.str();
       }
     };
-    map.dump<EED>();
+    varsMap.back().dump<EED>();
+    exprMap.back().dump<EED>();
+
   }
   
   void EnvI::flat_addItem(Item* i) {
@@ -5138,10 +5169,17 @@ namespace MiniZinc {
       {
         CallStackItem _csi(env,e);
         Let* let = e->cast<Let>();
+
         GC::mark();
+
+        Annotation& ann = let->ann();
+        if(ann.contains(constants().ann.new_constraint_context)){
+         env.push_expr_map();
+        }
         std::vector<EE> cs;
         std::vector<KeepAlive> flatmap;
         let->pushbindings();
+
         for (unsigned int i=0; i<let->let().size(); i++) {
           Expression* le = let->let()[i];
           if (VarDecl* vd = le->dyn_cast<VarDecl>()) {
@@ -5239,6 +5277,9 @@ namespace MiniZinc {
             vd->flat(Expression::cast<VarDecl>(flatmap.back()()));
             flatmap.pop_back();
           }
+        }
+        if(ann.contains(constants().ann.new_constraint_context)){
+          env.pop_expr_map();
         }
       }
       break;

@@ -1203,6 +1203,8 @@ namespace MiniZinc {
     ann.user_cut->type(Type::ann());
     ann.lazy_constraint = new Id(Location(), ASTString("lazy_constraint"), NULL);
     ann.lazy_constraint->type(Type::ann());
+    ann.new_constraint_context =  new Id(Location(), ASTString("new_constraint_context"), NULL);
+    ann.new_constraint_context->type(Type::ann());
     
     var_redef = new FunctionI(Location(),"__internal_var_redef",new TypeInst(Location(),Type::varbool()),
                               std::vector<VarDecl*>());
@@ -1400,6 +1402,7 @@ namespace MiniZinc {
     v.push_back(new StringLit(Location(), ann.is_introduced));
     v.push_back(ann.user_cut);
     v.push_back(ann.lazy_constraint);
+    v.push_back(ann.new_constraint_context);
     
     v.push_back(new StringLit(Location(),cli.cmdlineData_short_str));
     v.push_back(new StringLit(Location(),cli.cmdlineData_str));
