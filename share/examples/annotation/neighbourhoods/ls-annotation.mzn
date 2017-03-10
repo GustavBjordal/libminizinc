@@ -6,7 +6,9 @@ annotation ls_defines_generator(var bool: dummy_name);
 annotation ls_pre_condition(var bool: dummy_name);
 annotation ls_post_condition(var bool: dummy_name);
 annotation neighbourhood_or(ann: x, ann:y);
+annotation neighbourhood_or(array[int] of ann: X);
 annotation neighbourhood_and(ann: x, ann:y);
+annotation neighbourhood_and(array[int] of ann: X);
 annotation neighbourhood_definition;
 annotation neighbourhood_declaration(array[int] of ann: neighbourhoods,  ann: initialize);
 annotation neighbourhood_declaration(array[int] of ann: neighbourhoods);
@@ -23,7 +25,7 @@ function ann: swap(var bool, var bool);
 
 function ann: from(array[int] of ann);
 function ann: initialize(var bool);
-function ann: forall(array[int] of ann);
+function ann: forall(array[int] of ann: X) = neighbourhood_and(X);
 function ann: '/\' (ann:x,ann:y) = neighbourhood_and(x,y);
 function ann: '\/' (ann:x,ann:y) = neighbourhood_or(x, y);
 function ann: ensure(var bool);

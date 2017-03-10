@@ -116,20 +116,18 @@ namespace MiniZinc {
         _ensure = NULL;
       }
 
-      if(c.e()->isa<Call>() && (c.e()->dyn_cast<Call>())->id().str() == LSConstants::AND){
-        auto callArgs = (c.e()->dyn_cast<Call>())->args();
-        assert(callArgs.size() == 2 && "Wrong number of arguments to cbls and");
+      std::cerr << *c.e() << c.e()->isa<BinOp>()  << " bar "<< *(c.e()->dyn_cast<BinOp>())->lhs() << "--" << *(c.e()->dyn_cast<BinOp>())->rhs() << std::endl;
+      if(c.e()->isa<BinOp>() &&
+        (c.e()->dyn_cast<BinOp>())->rhs()->isa<Call>() &&
+        (c.e()->dyn_cast<BinOp>())->rhs()->dyn_cast<Call>()->id().str() == LSConstants::ENSURE){
         //If we have an ensure
-        if(callArgs[1]->isa<Call>() && (callArgs[1]->dyn_cast<Call>())->id().str() == LSConstants::ENSURE){
-          _moves = callArgs[0];
-        }else{
-          _moves = c.e();
-        }
-        /*for(auto itr = callArgs.begin(); itr != callArgs.end(); ++itr){
+
+       /*for(auto itr = callArgs.begin(); itr != callArgs.end(); ++itr){
           if((*itr)->isa<Call>() && ((*itr)->dyn_cast<Call>())->id().str() == "ensure")
             continue;
-          _moves.push_back(*itr);
+          _moves->push_back(*itr);
         }*/
+        _moves = (c.e()->dyn_cast<BinOp>())->lhs();
       }else{
         _moves = c.e();
       }
@@ -165,6 +163,9 @@ namespace MiniZinc {
         whereList->push_back(_where);
       }
 
+      /*std::vector<Expression*>* moveArgs = new std::vector<Expression*>();
+      moveArgs->push_back(new ArrayLit(_origC->loc(),*_moves));
+      Call* moves = new Call(_origC->loc(),LSConstants::AND,*moveArgs);*/
       //Construct nested lets let s
       Let* ensureLet = new Let(_origC->loc(), *ensureList, _moves);
       ensureLet->addAnnotation(constants().ann.new_constraint_context);
@@ -183,7 +184,7 @@ namespace MiniZinc {
       }
       std::cerr << "Where: " << *_where << std::endl;
       std::cerr << "Ensure: " << *_ensure << std::endl;
-      std::cerr << "Moves: " << *_moves << std::endl;
+      std::cerr << "Moves: " << "currently not printed" << std::endl;
       std::cerr << "Debug end:" << std::endl;
     }
   };
