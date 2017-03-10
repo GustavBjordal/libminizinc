@@ -1,0 +1,29 @@
+annotation new_constraint_context;
+%Neighbourhood flattening annotation
+annotation ls_dummy;
+annotation ls_initialize(var bool: dummy_name);
+annotation ls_defines_generator(var bool: dummy_name);
+annotation ls_pre_condition(var bool: dummy_name);
+annotation ls_post_condition(var bool: dummy_name);
+annotation neighbourhood_or(ann: x, ann:y);
+annotation neighbourhood_and(ann: x, ann:y);
+annotation neighbourhood_definition;
+annotation neighbourhood_declaration(array[int] of ann: neighbourhoods,  ann: initialize);
+annotation neighbourhood_declaration(array[int] of ann: neighbourhoods);
+%Moves
+function ann: swap_array(array[int] of var int: Xs1, var int: i, array[int] of var int: Xs2, var int: j);
+function ann: assign_array(array[int] of var int: Xs, var int: i, var int: v);
+function ann: assign(var int, var int);
+function ann: swap(var int, var int);
+
+function ann: swap_array(array[int] of var bool: Xs1, var int: i, array[int] of var bool: Xs2, var int: j);
+function ann: assign_array(array[int] of var bool: Xs, var int: i, var bool: v);
+function ann: assign(var bool, var bool);
+function ann: swap(var bool, var bool);
+
+function ann: from(array[int] of ann);
+function ann: initialize(var bool);
+function ann: forall(array[int] of ann);
+function ann: '/\' (ann:x,ann:y) = neighbourhood_and(x,y);
+function ann: '\/' (ann:x,ann:y) = neighbourhood_or(x, y);
+function ann: ensure(var bool);

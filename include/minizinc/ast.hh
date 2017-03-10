@@ -1465,6 +1465,8 @@ namespace MiniZinc {
         Id* user_cut;            // MIP
         Id* lazy_constraint;            // MIP
         Id* new_constraint_context;
+        Id* neighbourhood_definition;
+        Id* ls_dummy;
       } ann;
 
       /// Command line options

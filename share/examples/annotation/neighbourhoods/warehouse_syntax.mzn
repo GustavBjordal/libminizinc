@@ -1,0 +1,27 @@
+include "ls-annotation.mzn";
+
+include "globals.mzn";
+int: w = 5;
+int: s = 10;
+int: is_open_cost = 100;
+set of int: O = {2,4};
+array[1..w,1..s] of int: transportation_cost =
+[|1,2,3,4,5,6,7,8,9,10
+|1,2,3,4,5,6,7,8,9,10
+|1,2,3,4,5,6,7,8,9,10
+|1,2,3,4,5,6,7,8,9,10
+|1,2,3,4,5,6,7,8,9,10|];
+% Some decision variables omitted
+array[1..w] of var bool: open;
+
+function ann: warehouse(array [int] of var int: status) :: neighbourhood_definition =
+from(i in 1..w)(
+     assign_array(status,i,1-(status[i])) /\
+     ensure(exists(o in O)(status[o] = 1)))
+\/
+  from(i, j in 1..w where i<j /\ status[i] != status[j])(
+      swap_array(status,i,status,j) /\
+      ensure(exists(o in O)(status[o] = 1)))
+;
+
+solve :: warehouse(open) satisfy;

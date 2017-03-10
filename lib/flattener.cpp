@@ -18,6 +18,8 @@
 
 #include <minizinc/flattener.hh>
 #include <fstream>
+#include <minizinc/astiterator.hh>
+#include <minizinc/lstransformer.h>
 
 using namespace std;
 using namespace MiniZinc;
@@ -305,8 +307,14 @@ void Flattener::flatten()
           std::cerr << "Parsing '" << filenames[0] << "' ...";
         m = parse(env, filenames, datafiles, includePaths, flag_ignoreStdlib, false, flag_verbose, errstream);
       }
+
       if (m) {
         env.model(m);
+
+        lstransform(env);
+        Printer p(std::cerr, 80, 0);
+        p.print(m);
+
 //         pModel.reset(m);   // seems to be unnec
         if (flag_typecheck) {
           if (flag_verbose)
