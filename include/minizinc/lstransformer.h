@@ -14,6 +14,7 @@
 
 
 #include <iostream>
+#include <string>
 #include <minizinc/model.hh>
 #include <minizinc/astiterator.hh>
 #include <minizinc/model.hh>
@@ -36,7 +37,14 @@ namespace MiniZinc {
     static constexpr const char* NEIGHBOURHOOD_DEFINITION = "neighbourhood_definition";
     static constexpr const char* DUMMY = "dummy";
     static constexpr const char* NEIGHBOURHOOD_DECL = "neighbourhood_declaration";
+    static constexpr const char* ASSIGN_OP = "':='";
+    static constexpr const char* SWAP_OP = "':=:'";
+    static constexpr const char* ASSIGN = "assign";
+    static constexpr const char* SWAP = "swap";
+    static constexpr const char* ASSIGN_ARRAY = "assign_array";
+    static constexpr const char* SWAP_ARRAY = "swap_array";
   };
+  
   class CallFinder : public EVisitor {
   private:
     std::string _callName;
@@ -71,19 +79,119 @@ namespace MiniZinc {
 
   };
 
-  /*class IdReplacer : public EVisitor {
+  class OpReplacer : public EVisitor {
   private:
-    Id* _target;
-    VarDecl* _newDecl;
+
   public:
-    IdReplacer(Id& oldId, VarDecl& newDecl):_target(&oldId), _newDecl(&newDecl) {    }
-    /// Visit call
-    void vId(Id& i) {
-      if(i.str() == _target->str()) {
-        i.decl(_newDecl);
+    OpReplacer() {}
+    void vCall(Call& c) {
+      if(c.id().str() == LSConstants::ASSIGN_OP){
+        auto args = c.args();
+        assert(args.size() == 2);
+        if(args[0]->isa<ArrayAccess>()){
+          auto access = args[0]->dyn_cast<ArrayAccess>();
+          auto idxs = access->idx();
+          if(idxs.size() == 1){
+            std::vector<Expression*> newArgs;
+            newArgs.push_back(access->v());
+            newArgs.push_back(idxs[0]);
+            newArgs.push_back(args[1]);
+            c.id(ASTString(LSConstants::ASSIGN_ARRAY));
+            c.args(newArgs);
+          }else{
+            Expression* plusExpr =  IntLit::a(IntVal(1));
+            for (int i = 0; i < idxs.size()-1; ++i) {
+              std::vector<Expression*>* idxArgs = new std::vector<Expression*>();
+              idxArgs->push_back(access->v());
+              std::vector<Expression*>* minArgs = new std::vector<Expression*>();
+              minArgs->push_back(new Call(c.loc(),
+                                          "index_set_" + std::to_string(i+1) + "of" +
+                                          std::to_string(idxs.size()),*idxArgs));
+              BinOp* multExpr = new BinOp(c.loc(),idxs[i],BinOpType::BOT_MINUS,
+                                          new Call(c.loc(), "min",*minArgs));
+
+              for (int j = i; j < idxs.size()-1; ++j) {
+                std::vector<Expression*>* cardArgs = new std::vector<Expression*>();
+                cardArgs->push_back(new Call(c.loc(),
+                                             "index_set_" + std::to_string(j+1) + "of" +
+                                             std::to_string(idxs.size()),*idxArgs));
+                multExpr = new BinOp(c.loc(),multExpr,BinOpType::BOT_MULT,
+                                     new Call(c.loc(),"card", *cardArgs));
+              }
+              plusExpr = new BinOp(c.loc(),plusExpr,BinOpType::BOT_PLUS,multExpr);
+            }
+            plusExpr = new BinOp(c.loc(),plusExpr,BinOpType::BOT_PLUS,idxs[idxs.size()-1]);
+            std::cerr << " -----" << *plusExpr << std::endl;
+            std::vector<Expression*> newArgs;
+            std::vector<Expression*> array1dArgs;
+            array1dArgs.push_back(access->v());
+            newArgs.push_back(new Call(c.loc(),"array1d",array1dArgs));
+            newArgs.push_back(plusExpr);
+            newArgs.push_back(args[1]);
+            c.id(ASTString(LSConstants::ASSIGN_ARRAY));
+            c.args(newArgs);
+          }
+        }else if(args[0]->isa<Id>()){
+          c.id(ASTString(LSConstants::ASSIGN));
+        }else{
+          assert(false);
+        }
+      }else if(c.id().str() == LSConstants::SWAP_OP){
+        auto args = c.args();
+        assert(args.size() == 2);
+        if(args[0]->isa<ArrayAccess>() && args[1]->isa<ArrayAccess>()){
+          auto accessLHS = args[0]->dyn_cast<ArrayAccess>();
+          auto idxLHS = accessLHS->idx();
+          auto accessRHS = args[1]->dyn_cast<ArrayAccess>();
+          auto idxRHS = accessRHS->idx();
+          if(idxLHS.size() == 1 && idxRHS.size() == 1){
+            std::vector<Expression*> newArgs;
+            newArgs.push_back(accessLHS->v());
+            newArgs.push_back(idxLHS[0]);
+            newArgs.push_back(accessRHS->v());
+            newArgs.push_back(idxRHS[0]);
+            c.id(ASTString(LSConstants::SWAP_ARRAY));
+            c.args(newArgs);
+          }else{
+            assert(false && "not yet implemented");
+          }
+        }else if(args[0]->isa<Id>() && args[1]->isa<Id>()){
+          c.id(ASTString(LSConstants::SWAP));
+        }else{
+          assert(false);
+        }
       }
     }
-  };*/
+  };
+
+  class NeighbourhoodFromVerifier: public EVisitor{
+  public:
+    NeighbourhoodFromVerifier() {}
+
+  public:
+    /// Visit binary operator
+    void vBinOp(const BinOp& b) {
+      if(b.op() != BinOpType::BOT_OR){
+
+        throw new SyntaxError(b.loc(),"Other binop than or found.");
+      }
+    }
+    /// Visit call
+    void vCall(const Call& c) {
+      std::cerr <<" --" <<c << std::endl;
+      if(c.id().str() != LSConstants::FROM){
+        throw new SyntaxError(c.loc(),"other call than from found");
+      }
+    }
+
+    bool enter(Expression* e) {
+      if(!e->isa<Call>()){
+        return true;
+      }
+      return e->dyn_cast<Call>()->id().str() != LSConstants::FROM;
+    }
+
+  };
 
   class FromGatherer{
   private:
@@ -131,6 +239,12 @@ namespace MiniZinc {
       }else{
         _moves = c.e();
       }
+
+      std::cerr << "   Replacing moves" << std::endl;
+      OpReplacer m;
+      TopDownIterator<OpReplacer>(m).run(_moves);
+      std::cerr << "   Done replacing moves" << std::endl;
+
       std::cerr << *(c.e()) << std::endl;
     }
 
@@ -163,9 +277,6 @@ namespace MiniZinc {
         whereList->push_back(_where);
       }
 
-      /*std::vector<Expression*>* moveArgs = new std::vector<Expression*>();
-      moveArgs->push_back(new ArrayLit(_origC->loc(),*_moves));
-      Call* moves = new Call(_origC->loc(),LSConstants::AND,*moveArgs);*/
       //Construct nested lets let s
       Let* ensureLet = new Let(_origC->loc(), *ensureList, _moves);
       ensureLet->addAnnotation(constants().ann.new_constraint_context);
@@ -218,6 +329,9 @@ namespace MiniZinc {
           body = andBody->args()[0];
         }
 
+        NeighbourhoodFromVerifier _ver;
+        TopDownIterator<NeighbourhoodFromVerifier>(_ver).run(body);
+
         std::vector<Expression*>* froms = new std::vector<Expression*>();
 
         CallFinder _from(LSConstants::FROM);
@@ -255,6 +369,20 @@ namespace MiniZinc {
 
   }
 };
+
+/*class IdReplacer : public EVisitor {
+private:
+  Id* _target;
+  VarDecl* _newDecl;
+public:
+  IdReplacer(Id& oldId, VarDecl& newDecl):_target(&oldId), _newDecl(&newDecl) {    }
+  /// Visit call
+  void vId(Id& i) {
+    if(i.str() == _target->str()) {
+      i.decl(_newDecl);
+    }
+  }
+};*/
 
 /*
  class NeighbourhoodDefinitionVisitor : public EVisitor {
