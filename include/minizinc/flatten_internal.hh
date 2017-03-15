@@ -91,7 +91,13 @@ namespace MiniZinc {
     //Map map;
     std::vector<Map> varsMap;
     std::vector<Map> exprMap;
+    std::vector<EE> flatzincCalls;
     Model* _flat;
+  public:
+
+    void flat(Model *_flat);
+
+  protected:
     bool _failed;
     unsigned int ids;
     ASTStringMap<ASTString>::t reifyMap;
@@ -105,6 +111,8 @@ namespace MiniZinc {
     EnvI(Model* orig0);
     ~EnvI(void);
     long long int genId(void);
+    void addFlatCall(Call* callName, Expression* callBody);
+    std::vector<EE>* flatCall();
     void push_vars_map();
     void pop_vars_map();
     void push_expr_map();
@@ -432,6 +440,7 @@ namespace MiniZinc {
     x.resize(ci);
   }
 
+  void flatten_functions(Env& e, Ctx ctx);
 }
 
 #endif

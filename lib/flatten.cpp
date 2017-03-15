@@ -21,6 +21,7 @@
 #include <minizinc/stl_map_set.hh>
 
 #include <minizinc/flatten_internal.hh>
+#include <minizinc/ast.hh>
 
 namespace MiniZinc {
 
@@ -216,6 +217,14 @@ namespace MiniZinc {
       return ids++;
     }
 
+  void EnvI::addFlatCall(Call *callName, Expression *callBody){
+    flatzincCalls.push_back(EE(callName,callBody));
+  }
+  
+  std::vector<EE>* EnvI::flatCall(){
+    return &flatzincCalls;
+  }
+  
   void EnvI::push_vars_map(){
     varsMap.push_back(Map());
   }
@@ -238,10 +247,10 @@ namespace MiniZinc {
   void EnvI::map_insert(Expression* e, const EE& ee) {
       KeepAlive ka(e);
       if(e->isa<Id>() || is_a_lit(e) ){
-        std::cerr << "Varmap: " << *e << " >> " << *ee.r() << std::endl;
+       // std::cerr << "Varmap: " << *e << " >> " << *ee.r() << std::endl;
         varsMap.back().insert(ka,WW(ee.r(),ee.b()));
       }else{
-        std::cerr << "Exprmap: "<< *e << " >> " << *ee.r() << std::endl;
+       // std::cerr << "Exprmap: "<< *e << " >> " << *ee.r() << std::endl;
         exprMap.back().insert(ka,WW(ee.r(),ee.b()));
       }
 
@@ -788,7 +797,12 @@ namespace MiniZinc {
       os << '\n';
     return os;
   }
-  
+
+
+  void EnvI::flat(Model *_flat) {
+    EnvI::_flat = _flat;
+  }
+
   const std::vector<std::string>& Env::warnings(void) {
     return envi().warnings;
   }
@@ -4590,12 +4604,13 @@ namespace MiniZinc {
     case Expression::E_CALL:
       {
         Call* c = e->cast<Call>();
+
         FunctionI* decl = env.orig->matchFn(env,c,false);
         if (decl == NULL) {
           throw InternalError("undeclared function or predicate "
                               +c->id().str());
         }
-        
+
         if (decl->params().size()==1) {
           if (Call* call_body = Expression::dyn_cast<Call>(decl->e())) {
             if (call_body->args().size()==1 && Expression::equal(call_body->args()[0],decl->params()[0]->id())) {
@@ -4613,6 +4628,48 @@ namespace MiniZinc {
         nctx.neg = false;
         ASTString cid = c->id();
         CallStackItem _csi(env,e);
+        
+        //Gustav's new stuff - stop compilation of calls
+        if(decl->ann().contains(constants().ann.neighbourhood_definition)){
+          std::cerr << c->id() << std::endl;
+          std::vector<EE> args_ee(c->args().size());
+          for (unsigned int i=c->args().size(); i--;) {
+            Ctx argctx = nctx;
+            Expression* tmp = follow_id_to_decl(c->args()[i]);
+            if (VarDecl* vd = tmp->dyn_cast<VarDecl>())
+              tmp = vd->id();
+            CallArgItem cai(env);
+            args_ee[i] = flat_exp(env,argctx,tmp,NULL,NULL);
+          }
+          
+          std::vector<KeepAlive> args;
+          for (unsigned int i=0; i<args_ee.size(); i++)
+            args.push_back(args_ee[i].r());
+          
+          KeepAlive cr;
+          {
+            GCLock lock;
+            std::vector<Expression*> e_args = toExpVec(args);
+            Call* cr_c = new Call(c->loc().introduce(),cid,e_args);
+            decl = env.orig->matchFn(env,cr_c,false);
+            if (decl==NULL)
+              throw FlatteningError(env,cr_c->loc(), "cannot find matching declaration");
+            cr_c->type(decl->rtype(env,e_args,false));
+            assert(decl);
+            cr_c->decl(decl);
+            cr = cr_c;
+          }
+          Call* cr_c = cr()->cast<Call>();
+          std::cerr << *cr_c << std::endl;
+          ret.b = conj(env,b,Ctx(),args_ee);
+          ret.r = bind(env,ctx,r,cr_c);
+          
+          env.addFlatCall(cr_c, c);
+          return ret;
+        }
+        if(c->id().str() == "assign_array"){
+          std::cerr << c->id() << std::endl;
+        }
 
         if (decl->e()==NULL) {
           if (cid == constants().ids.forall) {
@@ -4800,7 +4857,8 @@ namespace MiniZinc {
               args.push_back(neg_al);
             }
 
-          } else if (decl->e()==NULL && cid == constants().ids.forall) {
+          }
+          else if (decl->e()==NULL && cid == constants().ids.forall) {
             ArrayLit* al = follow_id(args_ee[0].r())->cast<ArrayLit>();
             std::vector<KeepAlive> alv;
             for (unsigned int i=0; i<al->v().size(); i++) {
@@ -4833,7 +4891,8 @@ namespace MiniZinc {
             ArrayLit* nal = new ArrayLit(al->loc(),toExpVec(alv));
             nal->type(al->type());
             args.push_back(nal);
-          } else if (decl->e()==NULL && (cid == constants().ids.lin_exp || cid==constants().ids.sum)) {
+          }
+          else if (decl->e()==NULL && (cid == constants().ids.lin_exp || cid==constants().ids.sum)) {
             if (e->type().isint()) {
               flatten_linexp_call<IntLit>(env,ctx,nctx,cid,c,ret,b,r,args_ee,args);
             } else {
@@ -4841,7 +4900,8 @@ namespace MiniZinc {
             }
             if (args.size()==0)
               break;
-          } else {
+          }
+          else {
             for (unsigned int i=0; i<args_ee.size(); i++)
               args.push_back(args_ee[i].r());
           }
@@ -4858,6 +4918,7 @@ namespace MiniZinc {
             cr_c->decl(decl);
             cr = cr_c;
           }
+          
           EnvI::Map::iterator cit = env.map_find(cr());
           if (cit != env.map_end()) {
             ret.b = bind(env,Ctx(),b,env.ignorePartial ? constants().lit_true : cit->second.b());
@@ -5817,7 +5878,19 @@ namespace MiniZinc {
         startItem = endItem+1;
         endItem = m.size()-1;
       }
-
+      //Gustav's new stuff
+      /*{
+        GCLock lock;
+        std::vector<EE>* calls = env.flatCall();
+        for (int i = 0; i < calls->size(); i++) {
+          EE c = calls->at(i);
+          Call* callName = c.r()->dyn_cast<Call>();
+          FunctionI* decl = env.orig->matchFn(env,callName,false);
+          decl->ann().remove(constants().ann.neighbourhood_definition);
+          (void) flat_exp(env, Ctx(), callName, constants().var_true, constants().var_true);
+        }
+      }*/
+      
       for (unsigned int i=0; i<removedItems.size(); i++) {
         if (env.vo.occurrences(removedItems[i]->e())==0) {
           CollectDecls cd(env.vo,deletedVarDecls,removedItems[i]);
@@ -6461,4 +6534,46 @@ namespace MiniZinc {
     return stats;
   }
   
+  void flatten_functions(Env& e, Ctx ctx){
+    EnvI& env = e.envi();
+    int originalSize = env.flat()->size();
+    std::vector<FunctionI*> newFunctions;
+    Printer p(std::cerr, 120);
+    
+    {
+      GCLock lock;
+      std::vector<EE>* calls = env.flatCall();
+      for (int i = 0; i < calls->size(); i++) {
+        EE c = calls->at(i);
+        Call* callName = c.r()->dyn_cast<Call>();
+        FunctionI* decl = env.orig->matchFn(env,callName,false);
+        decl->ann().remove(constants().ann.neighbourhood_definition);
+        (void) flat_exp(env, Ctx(), callName, constants().var_true, constants().var_true);
+      
+        std::cerr << originalSize << " -> " << env.flat()->size() << std::endl;
+        int newSize = env.flat()->size();
+        std::vector<Expression*> letBody;
+        for (int i = originalSize; i < env.flat()->size(); i++) {
+          Item* itm = (*env.flat())[i];
+          if(itm->isa<ConstraintI>()){
+            letBody.push_back(itm->dyn_cast<ConstraintI>()->e());
+          }else if(itm->isa<VarDeclI>()){
+            letBody.push_back(itm->dyn_cast<VarDeclI>()->e());
+          }else{
+            std::cerr << "Something is wrong with the neighbourhood" << std::endl;
+          }
+          p.print(decl);
+          itm->remove();
+        }
+        assert(decl->e()->isa<Let>());
+        newFunctions.push_back(new FunctionI(decl->loc(),decl->id(), decl->ti(),
+                                       decl->params(),
+                                             new Let(decl->loc(), letBody, decl->e()->dyn_cast<Let>()->in())));
+        originalSize = newSize;
+      }
+      for (int i = 0; i<newFunctions.size(); i++) {
+        env.flat_addItem(newFunctions.at(i));
+      }
+    }
+  }
 }

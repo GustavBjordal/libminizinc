@@ -14,13 +14,14 @@ array[1..w,1..s] of int: transportation_cost =
 % Some decision variables omitted
 array[1..w] of var bool: open;
 
-function ann: warehouse(array [int] of var int: status) :: neighbourhood_definition =
-    from(i in 1..w)(
-       assign_array(status,i,1-(status[i])) /\
+function ann: warehouse_switch(array [int] of var int: status) :: neighbourhood_definition =
+    from(i in index_set(status))(
+       status[i] := 1-(status[i]) /\
        ensure(exists(o in O)(status[o] = 1)))
-\/ from(i, j in 1..w where i<j /\ status[i] != status[j])(
-        assign_array(status,i,status[j])  /\
-        assign_array(status,j,status[i])  /\
+;
+function ann: warehouse_swap(array [int] of var int: status) :: neighbourhood_definition =
+from(i, j in index_set(status) where i<j /\ status[i] != status[j])(
+        status[i] :=: status[j] /\
         ensure(exists(o in O)(status[o] = 1)));
 
-solve :: warehouse(open) satisfy;
+solve :: neighbourhood_and(warehouse_switch(sort(open)),warehouse_swap(sort(open))) satisfy;

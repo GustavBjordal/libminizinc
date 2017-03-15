@@ -395,6 +395,18 @@ void Flattener::flatten()
                 if (flag_verbose)
                   std::cerr << " done (" << stoptime(lasttime) << ")" << std::endl;
               }
+              
+              try {
+                MiniZinc::flatten_functions(env,Ctx());
+              } catch (LocationException& e) {
+                if (flag_verbose)
+                  std::cerr << std::endl;
+                std::cerr << e.what() << ": " << std::endl;
+                env.dumpErrorStack(std::cerr);
+                std::cerr << "  " << e.msg() << std::endl;
+                exit(EXIT_FAILURE);
+              }
+              
 
               if (!flag_newfzn) {
                 if (flag_verbose)

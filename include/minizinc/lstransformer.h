@@ -99,34 +99,12 @@ namespace MiniZinc {
             c.id(ASTString(LSConstants::ASSIGN_ARRAY));
             c.args(newArgs);
           }else{
-            Expression* plusExpr =  IntLit::a(IntVal(1));
-            for (int i = 0; i < idxs.size()-1; ++i) {
-              std::vector<Expression*>* idxArgs = new std::vector<Expression*>();
-              idxArgs->push_back(access->v());
-              std::vector<Expression*>* minArgs = new std::vector<Expression*>();
-              minArgs->push_back(new Call(c.loc(),
-                                          "index_set_" + std::to_string(i+1) + "of" +
-                                          std::to_string(idxs.size()),*idxArgs));
-              BinOp* multExpr = new BinOp(c.loc(),idxs[i],BinOpType::BOT_MINUS,
-                                          new Call(c.loc(), "min",*minArgs));
-
-              for (int j = i; j < idxs.size()-1; ++j) {
-                std::vector<Expression*>* cardArgs = new std::vector<Expression*>();
-                cardArgs->push_back(new Call(c.loc(),
-                                             "index_set_" + std::to_string(j+1) + "of" +
-                                             std::to_string(idxs.size()),*idxArgs));
-                multExpr = new BinOp(c.loc(),multExpr,BinOpType::BOT_MULT,
-                                     new Call(c.loc(),"card", *cardArgs));
-              }
-              plusExpr = new BinOp(c.loc(),plusExpr,BinOpType::BOT_PLUS,multExpr);
-            }
-            plusExpr = new BinOp(c.loc(),plusExpr,BinOpType::BOT_PLUS,idxs[idxs.size()-1]);
-            std::cerr << " -----" << *plusExpr << std::endl;
+            Expression *newIdx = get1dIndex(c, access, idxs);
             std::vector<Expression*> newArgs;
             std::vector<Expression*> array1dArgs;
             array1dArgs.push_back(access->v());
             newArgs.push_back(new Call(c.loc(),"array1d",array1dArgs));
-            newArgs.push_back(plusExpr);
+            newArgs.push_back(newIdx);
             newArgs.push_back(args[1]);
             c.id(ASTString(LSConstants::ASSIGN_ARRAY));
             c.args(newArgs);
@@ -153,7 +131,26 @@ namespace MiniZinc {
             c.id(ASTString(LSConstants::SWAP_ARRAY));
             c.args(newArgs);
           }else{
-            assert(false && "not yet implemented");
+            std::vector<Expression*> newArgs;
+            std::vector<Expression*> array1dArgsLHS;
+            array1dArgsLHS.push_back(accessLHS->v());
+            newArgs.push_back(new Call(c.loc(),"array1d",array1dArgsLHS));
+            if(idxLHS.size() > 1){
+              newArgs.push_back(get1dIndex(c,accessLHS,idxLHS));
+            } else {
+              newArgs.push_back(idxLHS[0]);
+            }
+
+            std::vector<Expression*> array1dArgsRHS;
+            array1dArgsRHS.push_back(accessRHS->v());
+            newArgs.push_back(new Call(c.loc(),"array1d",array1dArgsRHS));
+            if(idxRHS.size() > 1){
+              newArgs.push_back(get1dIndex(c,accessRHS,idxRHS));
+            } else {
+              newArgs.push_back(idxRHS[0]);
+            }
+            c.id(ASTString(LSConstants::SWAP_ARRAY));
+            c.args(newArgs);
           }
         }else if(args[0]->isa<Id>() && args[1]->isa<Id>()){
           c.id(ASTString(LSConstants::SWAP));
@@ -162,6 +159,33 @@ namespace MiniZinc {
         }
       }
     }
+
+    Expression* get1dIndex(const Call &c, const ArrayAccess *access, ASTExprVec <Expression> &idxs) const {
+      Expression* plusExpr =  IntLit::a(IntVal(1));
+      for (int i = 0; i < idxs.size()-1; ++i) {
+              std::__1::vector<Expression*> idxArgs;
+              idxArgs.push_back(access->v());
+              std::__1::vector<Expression*> minArgs;
+              minArgs.push_back(new Call(c.loc(),
+                                         "index_set_" + std::__1::to_string(i + 1) + "of" +
+                                         std::__1::to_string(idxs.size()), idxArgs));
+              BinOp* multExpr = new BinOp(c.loc(), idxs[i], BOT_MINUS,
+                                          new Call(c.loc(), "min",minArgs));
+
+              for (int j = i; j < idxs.size()-1; ++j) {
+                std::__1::vector<Expression*> cardArgs;
+                cardArgs.push_back(new Call(c.loc(),
+                                            "index_set_" + std::__1::to_string(j + 1) + "of" +
+                                            std::__1::to_string(idxs.size()), idxArgs));
+                multExpr = new BinOp(c.loc(), multExpr, BOT_MULT,
+                                     new Call(c.loc(),"card", cardArgs));
+              }
+              plusExpr = new BinOp(c.loc(), plusExpr, BOT_PLUS, multExpr);
+            }
+      plusExpr = new BinOp(c.loc(), plusExpr, BOT_PLUS, idxs[idxs.size() - 1]);
+      return plusExpr;
+    }
+
   };
 
   class NeighbourhoodFromVerifier: public EVisitor{
@@ -250,37 +274,37 @@ namespace MiniZinc {
 
     Let& getLetExpression(VarDecl& dummy){
 
-      std::vector<Expression*>* dummyArg = new std::vector<Expression*>();
-      dummyArg->push_back(dummy.id());
+      std::vector<Expression*> dummyArg;
+      dummyArg.push_back(dummy.id());
       Expression* trueLit = constants().lit_true;
 
       //Construct list of ensure conditions (it actually has size 1).
-      std::vector<Expression*>* ensureList = new std::vector<Expression*>();
+      std::vector<Expression*> ensureList;
       if(_ensure) {
-        _ensure->addAnnotation(new Call(_ensure->loc(),LSConstants::POST_COND,*dummyArg));
-        ensureList->push_back(_ensure);
+        _ensure->addAnnotation(new Call(_ensure->loc(),LSConstants::POST_COND,dummyArg));
+        ensureList.push_back(_ensure);
       }else{
-        ensureList->push_back(trueLit);
+        ensureList.push_back(trueLit);
       }
 
       //Construct list of where conditions and iterator variable declarations.
-      std::vector<Expression*>* whereList = new std::vector<Expression*>();
-      whereList->push_back(&dummy);
+      std::vector<Expression*> whereList;
+      whereList.push_back(&dummy);
       if(_iteratorVars.size() > 0) {
         for (auto itr = _iteratorVars.begin(); itr != _iteratorVars.end(); ++itr) {
-          (*itr)->addAnnotation(new Call((*itr)->loc(), LSConstants::DEFINES_GENERATOR, *dummyArg));
+          (*itr)->addAnnotation(new Call((*itr)->loc(), LSConstants::DEFINES_GENERATOR, dummyArg));
         }
-        whereList->insert(std::end(*whereList), std::begin(_iteratorVars), std::end(_iteratorVars));
+        whereList.insert(std::end(whereList), std::begin(_iteratorVars), std::end(_iteratorVars));
       }
       if(_where) {
-        _where->addAnnotation(new Call(_where->loc(),LSConstants::PRE_COND,*dummyArg));
-        whereList->push_back(_where);
+        _where->addAnnotation(new Call(_where->loc(),LSConstants::PRE_COND,dummyArg));
+        whereList.push_back(_where);
       }
 
       //Construct nested lets let s
-      Let* ensureLet = new Let(_origC->loc(), *ensureList, _moves);
+      Let* ensureLet = new Let(_origC->loc(), ensureList, _moves);
       ensureLet->addAnnotation(constants().ann.new_constraint_context);
-      Let* whereLet = new Let(_origC->loc(), *whereList, ensureLet);
+      Let* whereLet = new Let(_origC->loc(), whereList, ensureLet);
       whereLet->addAnnotation(constants().ann.new_constraint_context);
 
       std::cerr << *whereLet << std::endl;
@@ -332,7 +356,7 @@ namespace MiniZinc {
         NeighbourhoodFromVerifier _ver;
         TopDownIterator<NeighbourhoodFromVerifier>(_ver).run(body);
 
-        std::vector<Expression*>* froms = new std::vector<Expression*>();
+        std::vector<Expression*> froms;
 
         CallFinder _from(LSConstants::FROM);
         TopDownIterator<CallFinder>(_from).run(body);
@@ -345,15 +369,15 @@ namespace MiniZinc {
           VarDecl* dummy = new VarDecl((*itr)->loc(),ti,LSConstants::DUMMY);
           dummy->introduced(true);
           dummy->addAnnotation(constants().ann.ls_dummy);
-          froms->push_back(&(_g.getLetExpression(*dummy)));
+          froms.push_back(&(_g.getLetExpression(*dummy)));
           std::cerr << "Warning: The current implementation does not check that each from is separated by an \\/ operator." << std::endl;
         }
 
-        std::vector<Expression*>* nDeclArgs = new std::vector<Expression*>();
-        nDeclArgs->push_back(new ArrayLit(fi->loc(),*froms));
+        std::vector<Expression*> nDeclArgs;
+        nDeclArgs.push_back(new ArrayLit(fi->loc(),froms));
         if(init)
-          nDeclArgs->push_back(init);
-        Call* neighbourhoodDeclaration = new Call(fi->loc(),LSConstants::NEIGHBOURHOOD_DECL, *nDeclArgs);
+          nDeclArgs.push_back(init);
+        Call* neighbourhoodDeclaration = new Call(fi->loc(),LSConstants::NEIGHBOURHOOD_DECL, nDeclArgs);
         fi->e(neighbourhoodDeclaration);
         std::cerr << "Done" <<std::endl;
       }
