@@ -148,6 +148,8 @@ namespace MiniZinc {
     std::ostream& evalOutput(std::ostream& os);
     void createErrorStack(void);
     Call* surroundingCall(void) const;
+    
+    FunctionI* create_function(MiniZinc::Type &type, std::string name, std::vector<VarDecl*>& params, MiniZinc::Expression *body);
   };
 
   EE flat_exp(EnvI& env, Ctx ctx, Expression* e, VarDecl* r, VarDecl* b);
@@ -440,7 +442,8 @@ namespace MiniZinc {
     x.resize(ci);
   }
 
-  void flatten_functions(Env& e, Ctx ctx);
+  void flatten_neighbourhood_function(Env& e, Ctx ctx);
+  void create_flat_functions(Env& e, Ctx ctx);
 }
 
 #endif

@@ -23,6 +23,8 @@
 #include <minizinc/flatten_internal.hh>
 #include <minizinc/ast.hh>
 
+#include <minizinc/lstransformer.h>
+
 namespace MiniZinc {
 
   /// Output operator for contexts
@@ -523,6 +525,15 @@ namespace MiniZinc {
     if (callStack.size() >= 2)
       return callStack[callStack.size()-2]->untag()->dyn_cast<Call>();
     return NULL;
+  }
+  
+  FunctionI* EnvI::create_function(MiniZinc::Type &type, std::string name, std::vector<VarDecl*>& params, MiniZinc::Expression *body){
+    TypeInst* tmpType = new TypeInst(body->loc(),type);
+    FunctionI* tmpFunction = new FunctionI(body->loc(),
+                                           name,
+                                           tmpType,params,body);
+    orig->registerFn(*this, tmpFunction);
+    return tmpFunction;
   }
   
   CallStackItem::CallStackItem(EnvI& env0, Expression* e) : env(env0) {
@@ -4629,8 +4640,9 @@ namespace MiniZinc {
         ASTString cid = c->id();
         CallStackItem _csi(env,e);
         
+        std::cerr<< *c << std::endl;
         //Gustav's new stuff - stop compilation of calls
-        if(decl->ann().contains(constants().ann.neighbourhood_definition)){
+        if(decl->ann().contains(constants().ann.flat_function)){
           std::cerr << c->id() << std::endl;
           std::vector<EE> args_ee(c->args().size());
           for (unsigned int i=c->args().size(); i--;) {
@@ -6534,42 +6546,197 @@ namespace MiniZinc {
     return stats;
   }
   
-  void flatten_functions(Env& e, Ctx ctx){
+  FunctionI* create_flat_function_from_call(Env& e, Ctx ctx, const Location& loc,TypeInst* type,
+                                  ASTExprVec<VarDecl>& params ,std::string callName, Expression* call){
+    GCLock lock;
+    EnvI& env = e.envi();
+    env.push_expr_map();
+    
+    int originalSize = env.flat()->size();
+    EE result = flat_exp(env, Ctx(), call, NULL, constants().var_true);
+    std::cerr << *result.r() << std::endl;
+    int newSize = env.flat()->size();
+    std::vector<Expression*> letBody;
+    for (int i = originalSize; i < env.flat()->size(); i++) {
+      Item* itm = (*env.flat())[i];
+      if(itm->isa<ConstraintI>()){
+        letBody.push_back(itm->dyn_cast<ConstraintI>()->e());
+      }else if(itm->isa<VarDeclI>()){
+        letBody.push_back(itm->dyn_cast<VarDeclI>()->e());
+      }else{
+        std::cerr << "Something is wrong with the function" << std::endl;
+      }
+      itm->remove();
+    }
+    
+    env.pop_expr_map();
+    return new FunctionI(loc,callName, type, params, new Let(loc, letBody, result.r()));
+  }
+
+  Call *find_ensure(const Let *from, const Call *neighbourhoodCall, const FunctionI *neighbourhoodFunc,
+                  ASTExprVec <VarDecl> &params, int fromNumber, int neighbourhoodNumber) {
+    Call* ensure = NULL;
+    for (ExpressionSetIter anns = from->in()->ann().begin(); anns != from->in()->ann().end(); ++anns) {
+      if((*anns)->isa<Call>() && (*anns)->cast<Call>()->id().str() == LSConstants::ENSURE){
+        ensure=(*anns)->dyn_cast<Call>();
+        break;
+      }
+    }
+    if(ensure){
+      from->in()->ann().remove(ensure);
+      TypeInst* ti = new TypeInst(neighbourhoodFunc->loc(), Type::varbool());
+      std::vector<VarDecl*> ensureFuncParams;
+      ensureFuncParams.insert(ensureFuncParams.end(),params.begin(),params.end());
+      for(auto itvars = from->let().begin(); itvars != from->let().end();++itvars){
+        if((*itvars)->isa<VarDecl>()){
+          ensureFuncParams.push_back((*itvars)->dyn_cast<VarDecl>());
+        }
+      }
+      FunctionI* ensureFunction = new FunctionI(neighbourhoodFunc->loc(),
+                                                "FUN_INTRODUCED_" + std::to_string(neighbourhoodNumber) + "_" +
+                                                neighbourhoodCall->id().str() +
+                                                "_ENSURE_" + std::to_string(fromNumber),
+                                                ti,ensureFuncParams,ensure->args()[0]);
+      std::vector<Expression*> callArgs;
+      callArgs.insert(callArgs.end(),neighbourhoodCall->args().begin(),neighbourhoodCall->args().end());
+      for(auto itvars = from->let().begin(); itvars != from->let().end();++itvars){
+        if((*itvars)->isa<VarDecl>()){
+          auto _t =(*itvars)->dyn_cast<VarDecl>();
+          callArgs.push_back(_t->id());
+        }
+      }
+      
+      ensure = new Call(neighbourhoodCall->loc(),ensureFunction->id(),callArgs,ensureFunction);
+      ensure->type(Type::ann());
+    }
+    
+    
+    return ensure;
+  }
+  
+  Call *create_generator(Let *from, const Call *neighbourhoodCall, const FunctionI *neighbourhoodFunc, ASTExprVec <VarDecl> &params, int fromNumber, int neighbourhoodNumber) {
+    Call* generator = NULL;
+    
+    TypeInst* ti = new TypeInst(neighbourhoodFunc->loc(), Type::varbool());
+    FunctionI* generatorFunction = new FunctionI(neighbourhoodFunc->loc(),
+                                              "FUN_INTRODUCED_" + std::to_string(neighbourhoodNumber) + "_" +
+                                              neighbourhoodCall->id().str() +
+                                              "_GENERATOR_" + std::to_string(fromNumber),
+                                              ti,params,from);
+    
+    std::vector<Expression*> callArgs;
+    callArgs.insert(callArgs.end(),neighbourhoodCall->args().begin(),neighbourhoodCall->args().end());
+    
+    generator = new Call(neighbourhoodCall->loc(),generatorFunction->id(),callArgs,generatorFunction);
+    generator->type(Type::ann());
+    return generator;
+  }
+
+  
+  void create_flat_functions(Env& e, Ctx ctx){
+    EnvI& env = e.envi();
+    std::vector<FunctionI*> newFunctions;
+    Printer p(std::cerr, 120);
+    {
+      GCLock lock;
+      std::vector<EE>* calls = env.flatCall();
+      for (int callNumber = 0; callNumber < calls->size(); callNumber++) {
+        EE c = calls->at(callNumber);
+        Call* targetCall = c.r()->dyn_cast<Call>();
+        FunctionI* targetCallDecl = env.orig->matchFn(env,targetCall,false);
+        //Stop function from being flat ???
+        //targetCallDecl->ann().remove(constants().ann.flat_function);
+
+        ASTExprVec<VarDecl> params =  targetCallDecl->params();
+
+        FunctionI* tmpFunction = new FunctionI(targetCallDecl->loc(),
+                                                     "FUN_INTRODUCED_" + std::to_string(callNumber) + "_" +
+                                                       targetCallDecl->id().str(),
+                                               targetCallDecl->ti(),params,targetCallDecl->e());
+        env.orig->registerFn(env, tmpFunction);
+
+        std::vector<Expression*> tempCallArgs;
+        tempCallArgs.insert(tempCallArgs.end(),targetCall->args().begin(),targetCall->args().end());
+        Call* tmpCall = new Call(targetCall->loc(),tmpFunction->id(),tempCallArgs,tmpFunction);
+        tmpCall->type(tmpFunction->ti()->type());
+        
+        FunctionI* newFunction = create_flat_function_from_call(e, ctx, tmpFunction->loc(), tmpFunction->ti(), params, tmpFunction->id().str(), tmpCall);
+        newFunctions.push_back(newFunction);
+      }
+      for (int i = 0; i<newFunctions.size(); i++) {
+        env.flat_addItem(newFunctions.at(i));
+      }
+    }
+    
+    std:: cerr << ("----------- Done adding flat functions ---------------") << std::endl;
+  }
+
+  void flatten_neighbourhood_function(Env& e, Ctx ctx){
     EnvI& env = e.envi();
     int originalSize = env.flat()->size();
     std::vector<FunctionI*> newFunctions;
     Printer p(std::cerr, 120);
-    
     {
       GCLock lock;
       std::vector<EE>* calls = env.flatCall();
-      for (int i = 0; i < calls->size(); i++) {
-        EE c = calls->at(i);
-        Call* callName = c.r()->dyn_cast<Call>();
-        FunctionI* decl = env.orig->matchFn(env,callName,false);
-        decl->ann().remove(constants().ann.neighbourhood_definition);
-        (void) flat_exp(env, Ctx(), callName, constants().var_true, constants().var_true);
-      
-        std::cerr << originalSize << " -> " << env.flat()->size() << std::endl;
-        int newSize = env.flat()->size();
-        std::vector<Expression*> letBody;
-        for (int i = originalSize; i < env.flat()->size(); i++) {
-          Item* itm = (*env.flat())[i];
-          if(itm->isa<ConstraintI>()){
-            letBody.push_back(itm->dyn_cast<ConstraintI>()->e());
-          }else if(itm->isa<VarDeclI>()){
-            letBody.push_back(itm->dyn_cast<VarDeclI>()->e());
-          }else{
-            std::cerr << "Something is wrong with the neighbourhood" << std::endl;
+      for (int nNumber = 0; nNumber < calls->size(); nNumber++) {
+        EE c = calls->at(nNumber);
+        Call* nCall = c.r()->dyn_cast<Call>();
+        FunctionI* nDecl = env.orig->matchFn(env,nCall,false);
+        nDecl->ann().remove(constants().ann.neighbourhood_definition);
+        assert(nDecl->e()->isa<Call>());
+        Call* neighbourhood_decl = nDecl->e()->dyn_cast<Call>();
+        assert(neighbourhood_decl->id().str() == LSConstants::NEIGHBOURHOOD_DECL);
+        assert(neighbourhood_decl->args()[0]->isa<ArrayLit>());
+        ASTExprVec<VarDecl> params =  nDecl->params();
+        
+        ArrayLit* froms = neighbourhood_decl->args()[0]->dyn_cast<ArrayLit>();
+        for (int fromNumber = 0; fromNumber< froms->v().size(); fromNumber++) {
+          assert(froms->v()[fromNumber]->isa<Let>());
+          Let* from = froms->v()[fromNumber]->dyn_cast<Let>();
+        
+          //ensure
+          Call* ensure = find_ensure(from, nCall, nDecl, params, fromNumber, nNumber);
+          FunctionI* ensureFunction = NULL;
+          
+          p.print(nDecl);
+          
+          //generator
+          
+          Call* generator = create_generator(from, nCall, nDecl, params, fromNumber, nNumber);
+          std::cerr << " Generator:" << std::endl;
+          p.print(generator);
+          std::cerr << " Decl:" << std::endl;
+          p.print(generator->decl());
+          
+          
+          env.orig->registerFn(env, generator->decl());
+          FunctionI* generatorFunc = create_flat_function_from_call(e, ctx, nDecl->loc(), nDecl->ti(), params, nDecl->id().str()+"TEst", generator);
+          newFunctions.push_back(generatorFunc);
+          std::cerr << " Func:" << std::endl;
+          p.print(generatorFunc);
+          //flatten ensure
+          if(ensure){
+            env.orig->registerFn(env, ensure->decl());
+            p.print(ensure);
+            p.print(ensure->decl());
+            FunctionI* eDecl = ensure->decl();
+            auto p = eDecl->params();
+            ensureFunction = create_flat_function_from_call(e, ctx, eDecl->loc(), eDecl->ti(), p, eDecl->id().str(), ensure);
+            newFunctions.push_back(ensureFunction);
           }
-          p.print(decl);
-          itm->remove();
+          
         }
-        assert(decl->e()->isa<Let>());
-        newFunctions.push_back(new FunctionI(decl->loc(),decl->id(), decl->ti(),
-                                       decl->params(),
-                                             new Let(decl->loc(), letBody, decl->e()->dyn_cast<Let>()->in())));
-        originalSize = newSize;
+        if(neighbourhood_decl->args().size() == 2){ // if initialize
+          Call* init = neighbourhood_decl->args()[0]->dyn_cast<Call>();
+        }else if(neighbourhood_decl->args().size() == 1){ // if no initialize
+          
+        }else{
+          std::cerr << "Neighbourhood declaration contains the wrong number of arguments. This should not happen..." << std::endl;
+        }
+        p.print(nDecl);
+        
+        //newFunctions.push_back(create_flat_function_from_call(e, ctx, nDecl->loc(), nDecl->ti(),params, nDecl->id().str(), nCall, nDecl->e()->dyn_cast<Let>()->in()));
       }
       for (int i = 0; i<newFunctions.size(); i++) {
         env.flat_addItem(newFunctions.at(i));

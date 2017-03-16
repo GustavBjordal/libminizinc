@@ -1466,6 +1466,7 @@ namespace MiniZinc {
         Id* lazy_constraint;            // MIP
         Id* new_constraint_context;
         Id* neighbourhood_definition;
+        Id* flat_function;
         Id* ls_dummy;
       } ann;
 

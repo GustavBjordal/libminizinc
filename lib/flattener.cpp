@@ -397,7 +397,7 @@ void Flattener::flatten()
               }
               
               try {
-                MiniZinc::flatten_functions(env,Ctx());
+                MiniZinc::create_flat_functions(env,Ctx());
               } catch (LocationException& e) {
                 if (flag_verbose)
                   std::cerr << std::endl;

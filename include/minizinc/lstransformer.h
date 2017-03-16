@@ -24,8 +24,7 @@
 
 namespace MiniZinc {
 
-  class LSConstants{
-  public:
+  namespace LSConstants{
     static constexpr const char* AND = "neighbourhood_and";
     static constexpr const char* ENSURE = "ensure";
     static constexpr const char* WHERE = "where";
@@ -34,6 +33,7 @@ namespace MiniZinc {
     static constexpr const char* PRE_COND = "ls_pre_condition";
     static constexpr const char* POST_COND = "ls_post_condition";
     static constexpr const char* DEFINES_GENERATOR = "ls_defines_generator";
+    static constexpr const char* MOVE = "ls_move";
     static constexpr const char* NEIGHBOURHOOD_DEFINITION = "neighbourhood_definition";
     static constexpr const char* DUMMY = "dummy";
     static constexpr const char* NEIGHBOURHOOD_DECL = "neighbourhood_declaration";
@@ -272,7 +272,7 @@ namespace MiniZinc {
       std::cerr << *(c.e()) << std::endl;
     }
 
-    Let& getLetExpression(VarDecl& dummy){
+    Let& getLetExpression(EnvI& env, std::string neighbourhoodName, VarDecl& dummy){
 
       std::vector<Expression*> dummyArg;
       dummyArg.push_back(dummy.id());
@@ -301,12 +301,28 @@ namespace MiniZinc {
         whereList.push_back(_where);
       }
 
-      //Construct nested lets let s
-      Let* ensureLet = new Let(_origC->loc(), ensureList, _moves);
+      //Construct nested lets
+      Let* ensureLet = new Let(_origC->loc(), ensureList, constants().lit_true);
       ensureLet->addAnnotation(constants().ann.new_constraint_context);
-      Let* whereLet = new Let(_origC->loc(), whereList, ensureLet);
-      whereLet->addAnnotation(constants().ann.new_constraint_context);
 
+      std::vector<Expression*> callEnsureArgs;
+      std::vector<VarDecl*> ensureFuncParam;
+      Type vBool = Type::varbool();
+      FunctionI* ensureFunction = env.create_function(vBool,neighbourhoodName+"_ENSURE",ensureFuncParam,ensureLet);
+      ensureFunction->ann().add(constants().ann.flat_function);
+      Call* ensureCall = new Call(_origC->loc(),ensureFunction->id().str(),callEnsureArgs,ensureFunction);
+      ///No types!! :(((
+      
+      Let* whereLet = new Let(_origC->loc(), whereList, _moves);
+      whereLet->addAnnotation(constants().ann.new_constraint_context);  //
+
+      std::vector<Expression*> callEnsureAnnArgs;
+      callEnsureAnnArgs.push_back(ensureCall);
+      whereLet->addAnnotation(new Call(_origC->loc(),LSConstants::ENSURE,callEnsureAnnArgs));
+      
+      Printer p(std::cerr, 120);
+      p.print(ensureFunction);
+      
       std::cerr << *whereLet << std::endl;
       return *whereLet;
     }
@@ -345,12 +361,13 @@ namespace MiniZinc {
         std::cerr << *body << std::endl;
 
         Call* init = NULL;
-        if(body->isa<Call>() && body->dyn_cast<Call>()->id().str() == LSConstants::AND){
-          Call* andBody = body->dyn_cast<Call>();
+        std::cerr << body->isa<BinOp>() << std::endl;
+        if(body->isa<BinOp>() && body->dyn_cast<BinOp>()->op() == BinOpType::BOT_AND){
+          BinOp* andBody = body->dyn_cast<BinOp>();
           //Second argument of an and at the "root" level of a neighbourhood must be the initialize
-          assert(andBody->args()[1]->isa<Call>() && andBody->args()[1]->dyn_cast<Call>()->id().str() == LSConstants::INITIALIZE);
-          init = andBody->args()[1]->dyn_cast<Call>();
-          body = andBody->args()[0];
+          assert(andBody->lhs()->isa<Call>() && andBody->rhs()->dyn_cast<Call>()->id().str() == LSConstants::INITIALIZE);
+          init = andBody->rhs()->dyn_cast<Call>();
+          body = andBody->lhs();
         }
 
         NeighbourhoodFromVerifier _ver;
@@ -360,6 +377,7 @@ namespace MiniZinc {
 
         CallFinder _from(LSConstants::FROM);
         TopDownIterator<CallFinder>(_from).run(body);
+        int i = 0;
         auto foundCalls = _from.getFoundCalls();
         for(auto itr = foundCalls.begin(); itr != foundCalls.end(); ++itr){
           std::cerr << " A generator" << std::endl;
@@ -369,8 +387,8 @@ namespace MiniZinc {
           VarDecl* dummy = new VarDecl((*itr)->loc(),ti,LSConstants::DUMMY);
           dummy->introduced(true);
           dummy->addAnnotation(constants().ann.ls_dummy);
-          froms.push_back(&(_g.getLetExpression(*dummy)));
-          std::cerr << "Warning: The current implementation does not check that each from is separated by an \\/ operator." << std::endl;
+          froms.push_back(&(_g.getLetExpression(env, fi->id().str()+"_FROM_"+std::to_string(i),*dummy)));
+          i++;
         }
 
         std::vector<Expression*> nDeclArgs;
@@ -379,18 +397,16 @@ namespace MiniZinc {
           nDeclArgs.push_back(init);
         Call* neighbourhoodDeclaration = new Call(fi->loc(),LSConstants::NEIGHBOURHOOD_DECL, nDeclArgs);
         fi->e(neighbourhoodDeclaration);
+        fi->ann().add(constants().ann.flat_function);
         std::cerr << "Done" <<std::endl;
       }
     }
   };
 
-
-
-  void lstransform(Env& e) {
+  static void lstransform(Env& e) {
     GCLock lock;
     LSTranslate _lst(e.envi());
-    iterItems<LSTranslate>(_lst,e.model());;
-
+    iterItems<LSTranslate>(_lst,e.model());
   }
 };
 

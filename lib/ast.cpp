@@ -1207,6 +1207,8 @@ namespace MiniZinc {
     ann.new_constraint_context->type(Type::ann());
     ann.neighbourhood_definition =  new Id(Location(), ASTString("neighbourhood_definition"), NULL);
     ann.neighbourhood_definition->type(Type::ann());
+    ann.flat_function =  new Id(Location(), ASTString("flat_function"), NULL);
+    ann.flat_function->type(Type::ann());
     ann.ls_dummy =  new Id(Location(), ASTString("ls_dummy"), NULL);
     ann.ls_dummy->type(Type::ann());
     
@@ -1409,6 +1411,7 @@ namespace MiniZinc {
 
     v.push_back(ann.new_constraint_context);
     v.push_back(ann.neighbourhood_definition);
+    v.push_back(ann.flat_function);
     v.push_back(ann.ls_dummy);
     
     v.push_back(new StringLit(Location(),cli.cmdlineData_short_str));
