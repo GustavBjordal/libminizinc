@@ -1,10 +1,12 @@
 annotation new_constraint_context;
 %Neighbourhood flattening annotation
+annotation flat_function;
 annotation ls_dummy;
-annotation ls_initialize(var bool: dummy_name);
-annotation ls_defines_generator(var bool: dummy_name);
-annotation ls_pre_condition(var bool: dummy_name);
-annotation ls_post_condition(var bool: dummy_name);
+annotation ls_initialize;
+annotation ls_defines_generator;
+annotation ls_pre_condition;
+annotation ls_post_condition;
+annotation ls_move(ann: moves);
 annotation neighbourhood_or(ann: x, ann:y);
 annotation neighbourhood_or(array[int] of ann: X);
 annotation neighbourhood_and(ann: x, ann:y);
@@ -29,7 +31,7 @@ function ann: initialize(var bool);
 function ann: forall(array[int] of ann: X) = neighbourhood_and(X);
 function ann: '/\' (ann:x,ann:y);
 function ann: '\/' (ann:x,ann:y);
-function ann: ensure(var bool);
+function ann: ensure(var bool:e);
 
 function ann: ':='(var int: lhs, var int: rhs);
 function ann: ':=:'(var int: lhs, var int: rhs);
