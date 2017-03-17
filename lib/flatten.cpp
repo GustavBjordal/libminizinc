@@ -6425,6 +6425,7 @@ namespace MiniZinc {
           ci->remove();
         }
       } else if (FunctionI* fi = (*m)[i]->dyn_cast<FunctionI>()) {
+        GCLock lock;
         if (Let* let = Expression::dyn_cast<Let>(fi->e())) {
           std::vector<Expression*> new_let;
           for (unsigned int i=0; i<let->let().size(); i++) {

@@ -299,7 +299,7 @@ namespace MiniZinc {
       }
 
       //Construct nested lets
-      Let* ensureLet = new Let(_origC->loc(), ensureList, constants().lit_true);
+      Let* ensureLet = new Let(_origC->loc(), ensureList, constants().ann.ls_dummy);
       //ensureLet->addAnnotation(constants().ann.new_constraint_context);
 
       std::vector<Expression*> callEnsureArgs;
@@ -319,7 +319,7 @@ namespace MiniZinc {
         callEnsureArgs.push_back((d)->id());
       }
       
-      Type vBool = Type::varbool(0);
+      Type vBool = Type::ann();
       FunctionI* ensureFunction = env.create_function(vBool,neighbourhoodName+"_ENSURE",ensureFuncParam,ensureLet);
       ensureFunction->ann().add(constants().ann.flat_function);
       Call* ensureCall = new Call(_origC->loc(),ensureFunction->id().str(),callEnsureArgs,ensureFunction);
@@ -327,9 +327,9 @@ namespace MiniZinc {
       //REMOVE THIS MAYBE?
       std::vector<Expression*> callEnsureAnnArgs;
       callEnsureAnnArgs.push_back(ensureCall);
-      whereList.push_back(new Call(_origC->loc(),LSConstants::ENSURE,callEnsureAnnArgs));/// REMOVE THIS
-      
-      Let* whereLet = new Let(_origC->loc(), whereList, _moves);
+      //whereList.push_back(new Call(_origC->loc(),LSConstants::ENSURE,callEnsureAnnArgs));/// REMOVE THIS
+      BinOp* ensureAnd = new BinOp(_origC->loc(),_moves,BinOpType::BOT_AND,new Call(_origC->loc(),LSConstants::ENSURE,callEnsureAnnArgs));
+      Let* whereLet = new Let(_origC->loc(), whereList, ensureAnd);
       //whereLet->addAnnotation(constants().ann.new_constraint_context);  //
 
       //std::vector<Expression*> callEnsureAnnArgs;
