@@ -249,16 +249,20 @@ namespace MiniZinc {
   void EnvI::map_insert(Expression* e, const EE& ee) {
       KeepAlive ka(e);
       if(e->isa<Id>() || is_a_lit(e) ){
-       // std::cerr << "Varmap: " << *e << " >> " << *ee.r() << std::endl;
+      std::cerr << "Varmap: " << *e << " >> " << *ee.r() << std::endl;
         varsMap.back().insert(ka,WW(ee.r(),ee.b()));
       }else{
-       // std::cerr << "Exprmap: "<< *e << " >> " << *ee.r() << std::endl;
+      std::cerr << "Exprmap: "<< *e << " >> " << *ee.r() << std::endl;
         exprMap.back().insert(ka,WW(ee.r(),ee.b()));
       }
 
     }
 
   EnvI::Map::iterator EnvI::map_find(Expression* e) {
+    std::cerr << "Looking for "<< *e << std::endl;
+    if(e->isa<VarDecl>()){
+      std::cerr << "Looking for "<< *e->dyn_cast<VarDecl>() << std::endl;
+    }
     KeepAlive ka(e);
     Map& map = (e->isa<Id>() || is_a_lit(e)) ? varsMap.back() : exprMap.back();
 
@@ -527,7 +531,7 @@ namespace MiniZinc {
     return NULL;
   }
   
-  FunctionI* EnvI::create_function(MiniZinc::Type &type, std::string name, std::vector<VarDecl*>& params, MiniZinc::Expression *body){
+  FunctionI* EnvI::create_function(MiniZinc::Type& type, std::string name, std::vector<VarDecl*>& params, MiniZinc::Expression *body){
     TypeInst* tmpType = new TypeInst(body->loc(),type);
     FunctionI* tmpFunction = new FunctionI(body->loc(),
                                            name,
@@ -4640,11 +4644,10 @@ namespace MiniZinc {
         nctx.neg = false;
         ASTString cid = c->id();
         CallStackItem _csi(env,e);
-        
-        std::cerr<< *c << std::endl;
+
         //Gustav's new stuff - stop compilation of calls
         if(decl->ann().contains(constants().ann.flat_function)){
-          std::cerr << c->id() << std::endl;
+          std::cerr << "Postponing flattening of flat function: " << c->id() << std::endl;
           std::vector<EE> args_ee(c->args().size());
           for (unsigned int i=c->args().size(); i--;) {
             Ctx argctx = nctx;
@@ -6567,7 +6570,6 @@ namespace MiniZinc {
       }else{
         std::cerr << "Something is wrong with the function" << std::endl;
       }
-      itm->remove();
     }
     
     env.pop_expr_map();
@@ -6637,6 +6639,7 @@ namespace MiniZinc {
   void create_flat_functions(Env& e, Ctx ctx){
     EnvI& env = e.envi();
     std::vector<FunctionI*> newFunctions;
+    int originalSize = env.flat()->size();
     Printer p(std::cerr, 120);
     {
       GCLock lock;
@@ -6649,7 +6652,7 @@ namespace MiniZinc {
         //targetCallDecl->ann().remove(constants().ann.flat_function);
 
         ASTExprVec<VarDecl> params =  targetCallDecl->params();
-        std::cerr << "Processing Flat function" << std::endl;
+        std::cerr << "Creating Flat function" << std::endl;
         p.print(targetCall);
         p.print(targetCallDecl);
         FunctionI* tmpFunction = new FunctionI(targetCallDecl->loc(),
@@ -6665,13 +6668,22 @@ namespace MiniZinc {
         
         FunctionI* newFunction = create_flat_function_from_call(e, ctx, tmpFunction->loc(), tmpFunction->ti(), params, tmpFunction->id().str(), tmpCall);
         newFunctions.push_back(newFunction);
+        targetCall->id(newFunction->id());
       }
+      //Remove new flatzinc stuff
+      for (int i = originalSize; i < env.flat()->size(); i++) {
+        Item* itm = (*env.flat())[i];
+        itm->remove();
+      }
+      
       for (int i = 0; i<newFunctions.size(); i++) {
         env.flat_addItem(newFunctions.at(i));
       }
     }
     
     std:: cerr << ("----------- Done adding flat functions ---------------") << std::endl;
+    p.print(env.flat());
+    std:: cerr << ("----------- Done printing flat model ---------------") << std::endl;
   }
 
   void flatten_neighbourhood_function(Env& e, Ctx ctx){

@@ -196,7 +196,7 @@ namespace MiniZinc {
     /// Visit binary operator
     void vBinOp(const BinOp& b) {
       if(b.op() != BinOpType::BOT_OR){
-
+        std::cerr << *b.lhs() << " -- " << b.op() << *b.rhs() << std::endl;
         throw new SyntaxError(b.loc(),"Other binop than or found.");
       }
     }
@@ -272,16 +272,14 @@ namespace MiniZinc {
       std::cerr << *(c.e()) << std::endl;
     }
 
-    Let& getLetExpression(EnvI& env, FunctionI *fi, std::string neighbourhoodName, VarDecl& dummy){
+    Let& getLetExpression(EnvI& env, FunctionI *fi, std::string neighbourhoodName){
 
-      std::vector<Expression*> dummyArg;
-      dummyArg.push_back(dummy.id());
       Expression* trueLit = constants().lit_true;
 
       //Construct list of ensure conditions (it actually has size 1).
       std::vector<Expression*> ensureList;
       if(_ensure) {
-        _ensure->addAnnotation(new Call(_ensure->loc(),LSConstants::POST_COND,dummyArg));
+        _ensure->addAnnotation(constants().ann.ls_post_condition);
         ensureList.push_back(_ensure);
       }else{
         ensureList.push_back(trueLit);
@@ -289,21 +287,20 @@ namespace MiniZinc {
 
       //Construct list of where conditions and iterator variable declarations.
       std::vector<Expression*> whereList;
-      whereList.push_back(&dummy);
       if(_iteratorVars.size() > 0) {
         for (auto itr = _iteratorVars.begin(); itr != _iteratorVars.end(); ++itr) {
-          (*itr)->addAnnotation(new Call((*itr)->loc(), LSConstants::DEFINES_GENERATOR, dummyArg));
+          (*itr)->addAnnotation(constants().ann.ls_defines_generator);
         }
         whereList.insert(std::end(whereList), std::begin(_iteratorVars), std::end(_iteratorVars));
       }
       if(_where) {
-        _where->addAnnotation(new Call(_where->loc(),LSConstants::PRE_COND,dummyArg));
+        _where->addAnnotation(constants().ann.ls_pre_condition);
         whereList.push_back(_where);
       }
 
       //Construct nested lets
       Let* ensureLet = new Let(_origC->loc(), ensureList, constants().lit_true);
-      ensureLet->addAnnotation(constants().ann.new_constraint_context);
+      //ensureLet->addAnnotation(constants().ann.new_constraint_context);
 
       std::vector<Expression*> callEnsureArgs;
       std::vector<VarDecl*> ensureFuncParam;
@@ -314,23 +311,30 @@ namespace MiniZinc {
       }
       //Add declared variables to function and call
       for(auto itvars = _iteratorVars.begin(); itvars != _iteratorVars.end();++itvars){
-        ensureFuncParam.push_back(*itvars);
-        callEnsureArgs.push_back((*itvars)->id());
+        VarDecl* origVarDecl = (*itvars);
+        TypeInst* origTi = origVarDecl->ti();
+        TypeInst* ti = new TypeInst(origTi->loc(),origTi->type());
+        VarDecl *d = new VarDecl(origVarDecl->loc(),ti,origVarDecl->id());
+        ensureFuncParam.push_back(d);
+        callEnsureArgs.push_back((d)->id());
       }
-      ensureFuncParam.push_back(&dummy);
-      callEnsureArgs.push_back(dummy.id());
       
       Type vBool = Type::varbool(0);
       FunctionI* ensureFunction = env.create_function(vBool,neighbourhoodName+"_ENSURE",ensureFuncParam,ensureLet);
       ensureFunction->ann().add(constants().ann.flat_function);
       Call* ensureCall = new Call(_origC->loc(),ensureFunction->id().str(),callEnsureArgs,ensureFunction);
       
-      Let* whereLet = new Let(_origC->loc(), whereList, _moves);
-      whereLet->addAnnotation(constants().ann.new_constraint_context);  //
-
+      //REMOVE THIS MAYBE?
       std::vector<Expression*> callEnsureAnnArgs;
       callEnsureAnnArgs.push_back(ensureCall);
-      _moves->addAnnotation(new Call(_origC->loc(),LSConstants::ENSURE,callEnsureAnnArgs));
+      whereList.push_back(new Call(_origC->loc(),LSConstants::ENSURE,callEnsureAnnArgs));/// REMOVE THIS
+      
+      Let* whereLet = new Let(_origC->loc(), whereList, _moves);
+      //whereLet->addAnnotation(constants().ann.new_constraint_context);  //
+
+      //std::vector<Expression*> callEnsureAnnArgs;
+      //callEnsureAnnArgs.push_back(ensureCall);
+      //_moves->addAnnotation(new Call(_origC->loc(),LSConstants::ENSURE,callEnsureAnnArgs));
       
       
       std::cerr << *whereLet << std::endl;
@@ -375,7 +379,7 @@ namespace MiniZinc {
         if(body->isa<BinOp>() && body->dyn_cast<BinOp>()->op() == BinOpType::BOT_AND){
           BinOp* andBody = body->dyn_cast<BinOp>();
           //Second argument of an and at the "root" level of a neighbourhood must be the initialize
-          assert(andBody->lhs()->isa<Call>() && andBody->rhs()->dyn_cast<Call>()->id().str() == LSConstants::INITIALIZE);
+          assert(andBody->rhs()->dyn_cast<Call>()->id().str() == LSConstants::INITIALIZE);
           init = andBody->rhs()->dyn_cast<Call>();
           body = andBody->lhs();
         }
@@ -394,17 +398,31 @@ namespace MiniZinc {
           FromGatherer _g(*(((*itr)->args()[0])->dyn_cast<Comprehension>()));
           _g.debug();
           TypeInst* ti = new TypeInst((*itr)->loc(),Type::varbool());
-          VarDecl* dummy = new VarDecl((*itr)->loc(),ti,LSConstants::DUMMY);
-          dummy->introduced(true);
-          dummy->addAnnotation(constants().ann.ls_dummy);
-          froms.push_back(&(_g.getLetExpression(env, fi, fi->id().str()+"_FROM_"+std::to_string(i),*dummy)));
+          
+          Expression* fromBody = &(_g.getLetExpression(env, fi, fi->id().str()+"_FROM_"+std::to_string(i)));
+          
+          
+          std::vector<Expression*> callFromArgs;
+          std::vector<VarDecl*> fromFuncParam;
+          //Add function parameters to function and call
+          for (auto itr = fi->params().begin(); itr != fi->params().end(); ++itr) {
+            fromFuncParam.push_back(*itr);
+            callFromArgs.push_back((*itr)->id());
+          }
+          Type vAnn = Type::ann();
+          FunctionI* fromFunction = env.create_function(vAnn,fi->id().str()+"_FROM_"+std::to_string(i),fromFuncParam,fromBody);
+          fromFunction->ann().add(constants().ann.flat_function);
+          Call* fromCall = new Call(fi->loc(),fromFunction->id().str(),callFromArgs,fromFunction);
+          
+          froms.push_back(fromCall);
           i++;
         }
 
         std::vector<Expression*> nDeclArgs;
         nDeclArgs.push_back(new ArrayLit(fi->loc(),froms));
-        if(init)
+        if(init){
           nDeclArgs.push_back(init);
+        }
         Call* neighbourhoodDeclaration = new Call(fi->loc(),LSConstants::NEIGHBOURHOOD_DECL, nDeclArgs);
         fi->e(neighbourhoodDeclaration);
         fi->ann().add(constants().ann.flat_function);

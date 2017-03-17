@@ -1468,6 +1468,10 @@ namespace MiniZinc {
         Id* neighbourhood_definition;
         Id* flat_function;
         Id* ls_dummy;
+        Id* ls_initialize;
+        Id* ls_defines_generator;
+        Id* ls_pre_condition;
+        Id* ls_post_condition;
       } ann;
 
       /// Command line options
