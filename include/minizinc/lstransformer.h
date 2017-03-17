@@ -272,7 +272,7 @@ namespace MiniZinc {
       std::cerr << *(c.e()) << std::endl;
     }
 
-    Let& getLetExpression(EnvI& env, std::string neighbourhoodName, VarDecl& dummy){
+    Let& getLetExpression(EnvI& env, FunctionI *fi, std::string neighbourhoodName, VarDecl& dummy){
 
       std::vector<Expression*> dummyArg;
       dummyArg.push_back(dummy.id());
@@ -307,21 +307,31 @@ namespace MiniZinc {
 
       std::vector<Expression*> callEnsureArgs;
       std::vector<VarDecl*> ensureFuncParam;
-      Type vBool = Type::varbool();
+      //Add function parameters to function and call
+      for (auto itr = fi->params().begin(); itr != fi->params().end(); ++itr) {
+        ensureFuncParam.push_back(*itr);
+        callEnsureArgs.push_back((*itr)->id());
+      }
+      //Add declared variables to function and call
+      for(auto itvars = _iteratorVars.begin(); itvars != _iteratorVars.end();++itvars){
+        ensureFuncParam.push_back(*itvars);
+        callEnsureArgs.push_back((*itvars)->id());
+      }
+      ensureFuncParam.push_back(&dummy);
+      callEnsureArgs.push_back(dummy.id());
+      
+      Type vBool = Type::varbool(0);
       FunctionI* ensureFunction = env.create_function(vBool,neighbourhoodName+"_ENSURE",ensureFuncParam,ensureLet);
       ensureFunction->ann().add(constants().ann.flat_function);
       Call* ensureCall = new Call(_origC->loc(),ensureFunction->id().str(),callEnsureArgs,ensureFunction);
-      ///No types!! :(((
       
       Let* whereLet = new Let(_origC->loc(), whereList, _moves);
       whereLet->addAnnotation(constants().ann.new_constraint_context);  //
 
       std::vector<Expression*> callEnsureAnnArgs;
       callEnsureAnnArgs.push_back(ensureCall);
-      whereLet->addAnnotation(new Call(_origC->loc(),LSConstants::ENSURE,callEnsureAnnArgs));
+      _moves->addAnnotation(new Call(_origC->loc(),LSConstants::ENSURE,callEnsureAnnArgs));
       
-      Printer p(std::cerr, 120);
-      p.print(ensureFunction);
       
       std::cerr << *whereLet << std::endl;
       return *whereLet;
@@ -387,7 +397,7 @@ namespace MiniZinc {
           VarDecl* dummy = new VarDecl((*itr)->loc(),ti,LSConstants::DUMMY);
           dummy->introduced(true);
           dummy->addAnnotation(constants().ann.ls_dummy);
-          froms.push_back(&(_g.getLetExpression(env, fi->id().str()+"_FROM_"+std::to_string(i),*dummy)));
+          froms.push_back(&(_g.getLetExpression(env, fi, fi->id().str()+"_FROM_"+std::to_string(i),*dummy)));
           i++;
         }
 
@@ -407,6 +417,11 @@ namespace MiniZinc {
     GCLock lock;
     LSTranslate _lst(e.envi());
     iterItems<LSTranslate>(_lst,e.model());
+    
+    Printer p(std::cerr, 0);
+    std::cerr << "---------------Printing model"<< std::endl;
+    p.print(e.envi().orig);
+    std::cerr << "-------------Printing model done"<< std::endl;
   }
 };
 

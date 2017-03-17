@@ -532,7 +532,8 @@ namespace MiniZinc {
     FunctionI* tmpFunction = new FunctionI(body->loc(),
                                            name,
                                            tmpType,params,body);
-    orig->registerFn(*this, tmpFunction);
+    //orig->registerFn(*this, tmpFunction);
+    orig->addItem(tmpFunction);
     return tmpFunction;
   }
   
@@ -6648,7 +6649,9 @@ namespace MiniZinc {
         //targetCallDecl->ann().remove(constants().ann.flat_function);
 
         ASTExprVec<VarDecl> params =  targetCallDecl->params();
-
+        std::cerr << "Processing Flat function" << std::endl;
+        p.print(targetCall);
+        p.print(targetCallDecl);
         FunctionI* tmpFunction = new FunctionI(targetCallDecl->loc(),
                                                      "FUN_INTRODUCED_" + std::to_string(callNumber) + "_" +
                                                        targetCallDecl->id().str(),
