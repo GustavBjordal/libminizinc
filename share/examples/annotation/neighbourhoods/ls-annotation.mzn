@@ -31,7 +31,7 @@ function ann: initialize(var bool);
 function ann: forall(array[int] of ann: X) = neighbourhood_and(X);
 function ann: '/\' (ann:x,ann:y);
 function ann: '\/' (ann:x,ann:y);
-function ann: ensure(var bool:e);
+function ann: ensure(ann:e);
 
 function ann: ':='(var int: lhs, var int: rhs);
 function ann: ':=:'(var int: lhs, var int: rhs);
