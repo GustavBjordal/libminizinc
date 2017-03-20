@@ -324,7 +324,7 @@ include/minizinc/values.hh
 include/minizinc/stl_map_set.hh
 include/minizinc/thirdparty/SafeInt3.hpp
 ${parser_hh}
-        include/minizinc/lstransformer.h lib/cached/lstransformer.cpp)
+        include/minizinc/lstransformer.h)
 
 # add the executable
 add_executable(mzn2fzn minizinc.cpp)    #mzn2fzn.cpp)

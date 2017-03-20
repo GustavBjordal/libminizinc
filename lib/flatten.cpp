@@ -975,6 +975,8 @@ namespace MiniZinc {
     return true;
   }
   
+  KeepAlive bind_arraylit(EnvI &env, Ctx &ctx, Expression *e);
+  
   KeepAlive bind(EnvI& env, Ctx ctx, VarDecl* vd, Expression* e) {
     assert(e==NULL || !e->isa<VarDecl>());
     if (vd==constants().var_ignore)
@@ -1099,46 +1101,7 @@ namespace MiniZinc {
             if (al->type().bt()==Type::BT_ANN || al->v().size() <= 10)
               return e;
 
-            EnvI::Map::iterator it = env.map_find(al);
-            if (it != env.map_end()) {
-              return it->second.r()->cast<VarDecl>()->id();
-            }
-
-            std::vector<TypeInst*> ranges(al->dims());
-            for (unsigned int i=0; i<ranges.size(); i++) {
-              ranges[i] = new TypeInst(e->loc(),
-                                       Type(),
-                                       new SetLit(Location().introduce(),IntSetVal::a(al->min(i),al->max(i))));
-            }
-            ASTExprVec<TypeInst> ranges_v(ranges);
-            assert(!al->type().isbot());
-            Expression* domain = NULL;
-            if (al->v().size() > 0 && al->v()[0]->type().isint()) {
-              IntVal min = IntVal::infinity();
-              IntVal max = -IntVal::infinity();
-              for (unsigned int i=0; i<al->v().size(); i++) {
-                IntBounds ib = compute_int_bounds(env,al->v()[i]);
-                if (!ib.valid) {
-                  min = -IntVal::infinity();
-                  max = IntVal::infinity();
-                  break;
-                }
-                min = std::min(min, ib.l);
-                max = std::max(max, ib.u);
-              }
-              if (min != -IntVal::infinity() && max != IntVal::infinity()) {
-                domain = new SetLit(Location().introduce(), IntSetVal::a(min,max));
-              }
-            }
-            TypeInst* ti = new TypeInst(e->loc(),al->type(),ranges_v,domain);
-            if (domain)
-              ti->setComputedDomain(true);
-            
-            VarDecl* vd = newVarDecl(env, ctx, ti, NULL, NULL, al);
-            EE ee(vd,NULL);
-            env.map_insert(al,ee);
-            env.map_insert(vd->e(),ee);
-            return vd->id();
+            return bind_arraylit(env, ctx, e);
           }
         case Expression::E_CALL:
           {
@@ -1539,6 +1502,51 @@ namespace MiniZinc {
         }
       }
     }
+  }
+
+  KeepAlive bind_arraylit(EnvI &env, Ctx &ctx, Expression *e) {
+    ArrayLit* al = e->cast<ArrayLit>();
+
+    EnvI::Map::iterator it = env.map_find(al);
+    if (it != env.map_end()) {
+      return it->second.r()->cast<VarDecl>()->id();
+    }
+
+    std::__1::vector<TypeInst*> ranges(al->dims());
+    for (unsigned int i=0; i<ranges.size(); i++) {
+      ranges[i] = new TypeInst(e->loc(),
+                               Type(),
+                               new SetLit(Location().introduce(), IntSetVal::a(al->min(i), al->max(i))));
+    }
+    ASTExprVec<TypeInst> ranges_v(ranges);
+    assert(!al->type().isbot());
+    Expression* domain = NULL;
+    if (al->v().size() > 0 && al->v()[0]->type().isint()) {
+      IntVal min = IntVal::infinity();
+      IntVal max = -IntVal::infinity();
+      for (unsigned int i=0; i<al->v().size(); i++) {
+        IntBounds ib = compute_int_bounds(env,al->v()[i]);
+        if (!ib.valid) {
+          min = -IntVal::infinity();
+          max = IntVal::infinity();
+          break;
+        }
+        min = std::min(min, ib.l);
+        max = std::max(max, ib.u);
+      }
+      if (min != -IntVal::infinity() && max != IntVal::infinity()) {
+        domain = new SetLit(Location().introduce(), IntSetVal::a(min, max));
+      }
+    }
+    TypeInst* ti = new TypeInst(e->loc(),al->type(),ranges_v,domain);
+    if (domain)
+      ti->setComputedDomain(true);
+
+    VarDecl* vd = newVarDecl(env, ctx, ti, NULL, NULL, al);
+    EE ee(vd,NULL);
+    env.map_insert(al,ee);
+    env.map_insert(vd->e(),ee);
+    return vd->id();
   }
 
   KeepAlive conj(EnvI& env,VarDecl* b,Ctx ctx,const std::vector<EE>& e) {
@@ -4661,9 +4669,13 @@ namespace MiniZinc {
           }
           
           std::vector<KeepAlive> args;
-          for (unsigned int i=0; i<args_ee.size(); i++)
-            args.push_back(args_ee[i].r());
-          
+          for (unsigned int i=0; i<args_ee.size(); i++){
+            if(args_ee[i].r()->isa<ArrayLit>()){
+              args.push_back(bind_arraylit(env, ctx, args_ee[i].r()));
+            }else{
+              args.push_back(args_ee[i].r());
+            }
+          }
           KeepAlive cr;
           {
             GCLock lock;
@@ -6609,10 +6621,14 @@ namespace MiniZinc {
       }else{
         std::cerr << "Something is wrong with the function" << std::endl;
       }
+      itm->remove();
     }
     
     env.pop_expr_map();
-    return new FunctionI(loc,callName, type, params, new Let(loc, letBody, result.r()));
+    std::cerr << "Removing arguments from function definition" << std::endl;
+    ASTExprVec<VarDecl> noParams;
+    
+    return new FunctionI(loc,callName, type, noParams, new Let(loc, letBody, result.r()));
   }
   
   void create_flat_functions(Env& e, Ctx ctx){
@@ -6650,7 +6666,10 @@ namespace MiniZinc {
         targetCall->id(newFunction->id());
         std::cerr << "New function declaration:" << std::endl;
         p.print(newFunction);
+        std::cerr << "Removing arguments from function call" << std::endl;
+        targetCall->args(NULL);
         std::cerr << std::endl;
+        
       }
       //Remove new flatzinc stuff
       for (int i = originalSize; i < env.flat()->size(); i++) {
