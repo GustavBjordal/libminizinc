@@ -311,9 +311,8 @@ void Flattener::flatten()
       if (m) {
         env.model(m);
 
+        //Transforming Local search Neighbourhoods
         lstransform(env);
-        Printer p(std::cerr, 80, 0);
-        p.print(m);
 
 //         pModel.reset(m);   // seems to be unnec
         if (flag_typecheck) {
