@@ -747,7 +747,7 @@ vardecl_item :
         delete $2;
       }
     | ti_expr_and_id annotations MZN_EQ expr
-      { if ($1) $1->e($4);
+      { if ($1) $1->setRHS($4);
         if ($1 && $2) $1->addAnnotations(*$2);
         if ($1)
           $$ = new VarDeclI(@$,$1);
@@ -1698,7 +1698,7 @@ let_vardecl_item :
         delete $2;
       }
     | ti_expr_and_id annotations MZN_EQ expr
-      { if ($1) $1->e($4);
+      { if ($1) $1->setRHS($4);
         $$ = $1;
         if ($$) $$->loc(@$);
         if ($$) $$->toplevel(false);

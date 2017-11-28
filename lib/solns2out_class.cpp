@@ -130,7 +130,7 @@ void Solns2Out::restoreDefaults() {
     if (VarDeclI* vdi = (*getModel())[i]->dyn_cast<VarDeclI>()) {
       GCLock lock;
       auto& de = findOutputVar(vdi->e()->id()->str());
-      vdi->e()->e(de.second());
+      vdi->e()->setRHS(de.second());
       vdi->e()->evaluated(false);
     }
   }
@@ -157,7 +157,7 @@ void Solns2Out::parseAssignments(string& solution) {
         c->args()[c->args().size()-1]->type(de.first->type());
         c->decl(getModel()->matchFn(pEnv->envi(), c, false));
       }
-      de.first->e(ai->e());
+      de.first->setRHS(ai->e());
     }
   }
   declNewOutput();

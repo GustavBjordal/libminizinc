@@ -153,13 +153,13 @@ namespace MiniZinc {
           ArrayLit* array_solution = new ArrayLit(Location(),array_elems,dims_v);
           KeepAlive ka(array_solution);
           auto& de = getSolns2Out()->findOutputVar(vd->id()->str().str());
-          de.first->e(array_solution);
+          de.first->setRHS(array_solution);
         }
       } else if(vd->ann().contains(constants().ann.output_var)) {
         Expression* sol = getSolutionValue(vd->id());
-        vd->e(sol);
+        vd->setRHS(sol);
         auto& de = getSolns2Out()->findOutputVar(vd->id()->str().str());
-        de.first->e(sol);
+        de.first->setRHS(sol);
       }
     }
 

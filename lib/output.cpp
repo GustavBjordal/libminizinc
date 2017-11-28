@@ -214,7 +214,7 @@ namespace MiniZinc {
       VarDecl* vd_rename = new VarDecl(Location().introduce(), vd_rename_ti, vd->flat()->id()->idn(), NULL);
       vd_rename->flat(vd->flat());
       makePar(e,vd_rename);
-      vd->e(vd_rename->id());
+      vd->setRHS(vd_rename->id());
       e.output->addItem(new VarDeclI(Location().introduce(), vd_rename));
     }
   }
@@ -374,10 +374,10 @@ namespace MiniZinc {
               rhs->decl(decl);
             }
             outputVarDecls(env,nvi,it->second());
-            nvi->e()->e(rhs);
+            nvi->e()->setRHS(rhs);
           } else if (reallyFlat && cannotUseRHSForOutput(env, reallyFlat->e())) {
             assert(nvi->e()->flat());
-            nvi->e()->e(NULL);
+            nvi->e()->setRHS(NULL);
             if (nvi->e()->type().dim() == 0) {
               reallyFlat->addAnnotation(constants().ann.output_var);
             } else {
@@ -715,7 +715,7 @@ namespace MiniZinc {
               // side that is par, so we can use that.
               Expression* flate = eval_par(env, vdi->e()->e());
               outputVarDecls(env,vdi_copy,flate);
-              vd->e(flate);
+              vd->setRHS(flate);
             } else {
               vd = follow_id_to_decl(vd->id())->cast<VarDecl>();
               VarDecl* reallyFlat = vd->flat();
@@ -726,7 +726,7 @@ namespace MiniZinc {
                 // We can use the right hand side of the flat version of this variable
                 Expression* flate = copy(env,env.cmap,follow_id(reallyFlat->id()));
                 outputVarDecls(env,vdi_copy,flate);
-                vd->e(flate);
+                vd->setRHS(flate);
               } else if ( (it = env.reverseMappers.find(vd->id())) != env.reverseMappers.end()) {
                 // Found a reverse mapper, so we need to add the mapping function to the
                 // output model to map the FlatZinc value back to the model variable.
@@ -759,11 +759,11 @@ namespace MiniZinc {
                   rhs->decl(decl);
                 }
                 outputVarDecls(env,vdi_copy,rhs);
-                vd->e(rhs);
+                vd->setRHS(rhs);
               } else if (cannotUseRHSForOutput(env,vd->e())) {
                 // If the VarDecl does not have a usable right hand side, it needs to be
                 // marked as output in the FlatZinc
-                vd->e(NULL);
+                vd->setRHS(NULL);
                 assert(vd->flat());
                 if (vd->type().dim() == 0) {
                   vd->flat()->addAnnotation(constants().ann.output_var);
@@ -782,7 +782,7 @@ namespace MiniZinc {
                     }
                     if (!needOutputAnn) {
                       outputVarDecls(env, vdi_copy, al);
-                      vd->e(copy(env,env.cmap,al));
+                      vd->setRHS(copy(env,env.cmap,al));
                     }
                   }
                   if (needOutputAnn) {
@@ -849,7 +849,7 @@ namespace MiniZinc {
                 removeIsOutput(reallyFlat);
                 Expression* flate = copy(e,e.cmap,follow_id(reallyFlat->id()));
                 outputVarDecls(e,item,flate);
-                vd->e(flate);
+                vd->setRHS(flate);
               } else if ( (it = e.reverseMappers.find(vd->id())) != e.reverseMappers.end()) {
                 Call* rhs = copy(e,e.cmap,it->second())->cast<Call>();
                 std::vector<Type> tv(rhs->args().size());
@@ -884,7 +884,7 @@ namespace MiniZinc {
                 }
                 
                 outputVarDecls(e,item,it->second()->cast<Call>());
-                vd->e(rhs);
+                vd->setRHS(rhs);
               } else {
                 // If the VarDecl does not have a usable right hand side, it needs to be
                 // marked as output in the FlatZinc
@@ -909,7 +909,7 @@ namespace MiniZinc {
                     }
                     
                     outputVarDecls(e, item, al);
-                    vd->e(copy(e,e.cmap,al));
+                    vd->setRHS(copy(e,e.cmap,al));
                   }
                 }
                 if (needOutputAnn) {

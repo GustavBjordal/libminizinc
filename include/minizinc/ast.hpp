@@ -550,7 +550,7 @@ namespace MiniZinc {
   }
 
   inline void
-  VarDecl::e(Expression* rhs) {
+  VarDecl::setRHS(Expression* rhs) {
     _e = rhs;
   }
   

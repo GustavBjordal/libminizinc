@@ -100,7 +100,7 @@ namespace MiniZinc {
                 IntVal i, KeepAlive in, std::vector<typename Eval::ArrayVal>& a) {
     {
       GCLock lock;
-      e->decl(gen,id)->e(IntLit::a(i));
+      e->decl(gen,id)->setRHS(IntLit::a(i));
     }
     CallStackItem csi(env, e->decl(gen,id)->id(), i);
     if (id == e->n_decls(gen)-1) {
@@ -139,7 +139,7 @@ namespace MiniZinc {
                   IntVal i, KeepAlive in, std::vector<typename Eval::ArrayVal>& a) {
     ArrayLit* al = in()->cast<ArrayLit>();
     CallStackItem csi(env, e->decl(gen,id)->id(), i);
-    e->decl(gen,id)->e(al->v()[i.toInt()]);
+    e->decl(gen,id)->setRHS(al->v()[i.toInt()]);
     e->rehash();
     if (id == e->n_decls(gen)-1) {
       bool where = true;
@@ -169,7 +169,7 @@ namespace MiniZinc {
     } else {
       eval_comp_array<Eval>(env, eval,e,gen,id+1,in,a);
     }
-    e->decl(gen,id)->e(NULL);
+    e->decl(gen,id)->setRHS(NULL);
     e->decl(gen,id)->flat(NULL);
   }
 

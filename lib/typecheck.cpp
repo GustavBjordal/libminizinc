@@ -150,7 +150,7 @@ namespace MiniZinc {
       Type tt = nsl->type();
       tt.enumId(vd->type().enumId());
       nsl->type(tt);
-      vd->e(nsl);
+      vd->setRHS(nsl);
     } else {
       throw TypeError(env, vd->e()->loc(),
                       "invalid initialisation for enum `"+ident->v().str()+"'");
@@ -198,7 +198,7 @@ namespace MiniZinc {
       if (vd_enumToString) {
         /// TODO: find a better solution (don't introduce the vd_enumToString until we
         ///       know it's a non-anonymous enum)
-        vd_enumToString->e(new ArrayLit(Location().introduce(), std::vector<Expression*>()));
+        vd_enumToString->setRHS(new ArrayLit(Location().introduce(), std::vector<Expression*>()));
       }
       {
         TypeInst* ti_aa = new TypeInst(Location().introduce(),Type::parint());
@@ -1044,7 +1044,7 @@ namespace MiniZinc {
       for (int j=0; j<c.n_decls(gen_i); j++) {
         if (needIntLit) {
           GCLock lock;
-          c.decl(gen_i,j)->e(IntLit::aEnum(0,ty_id.enumId()));
+          c.decl(gen_i,j)->setRHS(IntLit::aEnum(0,ty_id.enumId()));
         }
         c.decl(gen_i,j)->type(ty_id);
         c.decl(gen_i,j)->ti()->type(ty_id);
@@ -1261,7 +1261,7 @@ namespace MiniZinc {
                                             "initialisation value for `"+vd.id()->str().str()+"' has invalid type-inst: expected `"+
                                             vd.ti()->type().toString(_env)+"', actual `"+vd.e()->type().toString(_env)+"'"));
           } else {
-            vd.e(addCoercion(_env, _model, vd.e(), vd.ti()->type())());
+            vd.setRHS(addCoercion(_env, _model, vd.e(), vd.ti()->type())());
           }
         } else {
           assert(!vd.type().isunknown());
@@ -1438,7 +1438,7 @@ namespace MiniZinc {
           throw TypeError(env.envi(),ai->loc(),"multiple assignment to the same variable");
         }
       } else {
-        vd->e(ai->e());
+        vd->setRHS(ai->e());
         
         if (vd->ti()->isEnum()) {
           GCLock lock;
@@ -1448,7 +1448,7 @@ namespace MiniZinc {
             throw TypeError(env.envi(),ai->loc(),"multiple definition of the same enum");
           AssignI* ai_enum = createEnumMapper(env.envi(), m, vd->ti()->type().enumId(), vd, vd_enum, enumItems2);
           if (ai_enum) {
-            vd_enum->e(ai_enum->e());
+            vd_enum->setRHS(ai_enum->e());
             ai_enum->remove();
           }
         }
@@ -1573,7 +1573,7 @@ namespace MiniZinc {
                                            i->decl()->ti()->type().toString(env)+"', actual `"+i->e()->type().toString(env)+"'"));
             // Assign to "true" constant to avoid generating further errors that the parameter
             // is undefined
-            i->decl()->e(constants().lit_true);
+            i->decl()->setRHS(constants().lit_true);
           }
         }
         void vConstraintI(ConstraintI* i) {
@@ -1647,7 +1647,7 @@ namespace MiniZinc {
       OutputI* outputItem;
       TSV3(EnvI& env0, Model* m0) : env(env0), m(m0), outputItem(NULL) {}
       void vAssignI(AssignI* i) {
-        i->decl()->e(addCoercion(env, m, i->e(), i->decl()->type())());
+        i->decl()->setRHS(addCoercion(env, m, i->e(), i->decl()->type())());
       }
       void vOutputI(OutputI* oi) {
         if (outputItem==NULL) {
@@ -1676,7 +1676,7 @@ namespace MiniZinc {
       if (ts.decls[i]->toplevel() &&
           ts.decls[i]->type().ispar() && !ts.decls[i]->type().isann() && ts.decls[i]->e()==NULL) {
         if (ts.decls[i]->type().isopt()) {
-          ts.decls[i]->e(constants().absent);
+          ts.decls[i]->setRHS(constants().absent);
         } else if (!ignoreUndefinedParameters) {
           typeErrors.push_back(TypeError(env.envi(), ts.decls[i]->loc(),
                                          "  symbol error: variable `" + ts.decls[i]->id()->str().str()

@@ -640,7 +640,7 @@ namespace MiniZinc {
         if (vd->ti()->ranges().size() > 0) {
           GC::trail(reinterpret_cast<Expression**>(&vd->_ti),vd->ti());
         }
-        vd->e(_let_orig[i]);
+        vd->setRHS(_let_orig[i]);
       }
     }
   }

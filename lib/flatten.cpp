@@ -141,7 +141,7 @@ namespace MiniZinc {
     if (vd->e()) {
       bind(env, ctx, vd, rhs);
     } else {
-      vd->e(rhs);
+      vd->setRHS(rhs);
     }
     assert(!vd->type().isbot());
     if (origVd && (origVd->id()->idn()!=-1 || origVd->toplevel())) {
@@ -1218,7 +1218,7 @@ namespace MiniZinc {
               didRewrite = true;
             }
             
-            vd->e(constants().boollit(isTrue));
+            vd->setRHS(constants().boollit(isTrue));
             if (vd->ti()->domain()) {
               if (vd->ti()->domain() != vd->e()) {
                 env.fail();
@@ -1322,7 +1322,7 @@ namespace MiniZinc {
                   if (c->decl()->e()) {
                     flat_exp(env, Ctx(), c, constants().var_true, constants().var_true);
                     ret = vd->id();
-                    vd->e(e);
+                    vd->setRHS(e);
                     env.vo_add_exp(vd);
                   }
                 }
@@ -1330,7 +1330,7 @@ namespace MiniZinc {
             }
             
             if (ret != vd->id()) {
-              vd->e(ret);
+              vd->setRHS(ret);
               env.vo_add_exp(vd);
               ret = vd->id();
             }
@@ -3251,7 +3251,7 @@ namespace MiniZinc {
 
             ArrayLit* al = new ArrayLit(Location().introduce(),elems,dims);
             al->type(vd->type());
-            vd->e(al);
+            vd->setRHS(al);
             env.vo_add_exp(vd);
             EE ee;
             ee.r = vd;
@@ -4429,7 +4429,7 @@ namespace MiniZinc {
                   } else if (changeDom) {
                     env.flat_changeDomain(id->decl(), new SetLit(Location().introduce(),newdom), false);
                     if (id->decl()->e()==NULL && newdom->min()==newdom->max()) {
-                      id->decl()->e(IntLit::a(newdom->min()));
+                      id->decl()->setRHS(IntLit::a(newdom->min()));
                     }
                   }
                   id = id->decl()->e() ? id->decl()->e()->dyn_cast<Id>() : NULL;
@@ -5061,7 +5061,7 @@ namespace MiniZinc {
                 } else {
                   reif_b = r;
                 }
-                reif_b->e(cr());
+                reif_b->setRHS(cr());
                 if (r != NULL && r->e() != NULL) {
                   bind(env,Ctx(),r,reif_b->id());
                 }
@@ -5112,7 +5112,7 @@ namespace MiniZinc {
                 VarDecl* vd = decl->params()[i];
                 previousParameters[i] = vd->e();
                 vd->flat(vd);
-                vd->e(args[i]());
+                vd->setRHS(args[i]());
               }
               
               if (decl->e()->type().isbool() && !decl->e()->type().isopt()) {
@@ -5195,7 +5195,7 @@ namespace MiniZinc {
               // Restore previous mapping
               for (unsigned int i=decl->params().size(); i--;) {
                 VarDecl* vd = decl->params()[i];
-                vd->e(previousParameters[i]());
+                vd->setRHS(previousParameters[i]());
                 vd->flat(vd->e() ? vd : NULL);
               }
             }
@@ -5308,7 +5308,7 @@ namespace MiniZinc {
               VarDecl* nvd = newVarDecl(env, ctx, ti, NULL, vd, NULL);
               let_e = nvd->id();
             }
-            vd->e(let_e);
+            vd->setRHS(let_e);
             flatmap.push_back(vd->flat());
             if (Id* id = Expression::dyn_cast<Id>(let_e)) {
               vd->flat(id->decl());
@@ -5464,10 +5464,10 @@ namespace MiniZinc {
               GCLock lock;
               Location v_loc = v->e()->e()->loc();
               if (!v->e()->e()->type().cv()) {
-                v->e()->e(eval_par(env,v->e()->e()));
+                v->e()->setRHS(eval_par(env,v->e()->e()));
               } else {
                 EE ee = flat_exp(env, Ctx(), v->e()->e(), NULL, constants().var_true);
-                v->e()->e(ee.r());
+                v->e()->setRHS(ee.r());
               }
               if (v->e()->type().dim() > 0) {
                 checkIndexSets(env,v->e(), v->e()->e());
@@ -5609,7 +5609,7 @@ namespace MiniZinc {
                   vdi->remove();
                   keptVariable = false;
                 } else {
-                  vdi->e()->e(NULL);
+                  vdi->e()->setRHS(NULL);
                 }
                 env.flat_addItem(ci);
               } else if (vdi->e()->type().ispar() || vdi->e()->ti()->computedDomain()) {
@@ -5832,7 +5832,7 @@ namespace MiniZinc {
                 if (nc != NULL) {
                   CollectDecls cd(env.vo,deletedVarDecls,vdi);
                   topDown(cd,c);
-                  vd->e(NULL);
+                  vd->setRHS(NULL);
                   /// TODO: check if removing variables here makes sense:
 //                  if (!isOutput(vd) && env.vo.occurrences(vd)==0) {
 //                    removedItems.push_back(vdi);
@@ -5955,7 +5955,7 @@ namespace MiniZinc {
             outputVarDecls(env,vdi,rhs);
             
             removeIsOutput(vdi->e()->flat());
-            vdi->e()->e(rhs);
+            vdi->e()->setRHS(rhs);
           }
         }
       }
@@ -6058,7 +6058,7 @@ namespace MiniZinc {
         
         // Store RHS
         Expression* ve = vd->e();
-        vd->e(constants().lit_true);
+        vd->setRHS(constants().lit_true);
         vd->ti()->setDomain(NULL);
         // Ex: var bool: b = true
         
@@ -6124,7 +6124,7 @@ namespace MiniZinc {
             //  var false: b = clause([x]) => bool_clause_reif([x], b)
             const Call* c = vd->e()->cast<Call>();
             GCLock lock;
-            vd->e(NULL);
+            vd->setRHS(NULL);
             vd->addAnnotation(constants().ann.is_defined_var);
             ASTString cid;
             if (c->id() == constants().ids.exists) {
@@ -6156,7 +6156,7 @@ namespace MiniZinc {
         }
         if (Expression::equal(vd->ti()->domain(),constants().lit_false)) {
           vd->ti()->setDomain(NULL);
-          vd->e(constants().lit_false);
+          vd->setRHS(constants().lit_false);
         }
       }
     } else if (vd->type().isvar() && vd->type().dim()==0) {
@@ -6164,7 +6164,7 @@ namespace MiniZinc {
       if (vd->e() != NULL) {
         if (const Call* cc = vd->e()->dyn_cast<Call>()) {
           // Remove RHS from vd
-          vd->e(NULL);
+          vd->setRHS(NULL);
           vd->addAnnotation(constants().ann.is_defined_var);
           
           std::vector<Expression*> args(cc->args().size());
@@ -6235,7 +6235,7 @@ namespace MiniZinc {
       // a = [1,2,3]; b = a;
       // vd = b => vd = [1,2,3]
       if (!vd->e()->isa<ArrayLit>()) {
-        vd->e(follow_id(vd->e()));
+        vd->setRHS(follow_id(vd->e()));
       }
       
       // If empty array or 1 indexed, continue

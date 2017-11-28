@@ -32,7 +32,7 @@ namespace MiniZinc {
     typename E::Val r = E::e(env,vd->e());
     if (!vd->evaluated() && (vd->toplevel() || vd->type().dim() > 0) ) {
       Expression* ne = E::exp(r);
-      vd->e(ne);
+      vd->setRHS(ne);
       vd->evaluated(true);
     }
     return r;
@@ -339,7 +339,7 @@ namespace MiniZinc {
       VarDecl* vd = ce->decl()->params()[i];
       previousParameters[i] = vd->e();
       vd->flat(vd);
-      vd->e(params[i]);
+      vd->setRHS(params[i]);
       if (vd->e()->type().ispar()) {
         if (Expression* dom = vd->ti()->domain()) {
           if (!dom->isa<TIId>()) {
@@ -368,7 +368,7 @@ namespace MiniZinc {
     Eval::checkRetVal(env, ret, ce->decl());
     for (unsigned int i=ce->decl()->params().size(); i--;) {
       VarDecl* vd = ce->decl()->params()[i];
-      vd->e(previousParameters[i]);
+      vd->setRHS(previousParameters[i]);
       vd->flat(vd->e() ? vd : NULL);
     }
     return ret;

@@ -367,7 +367,7 @@ namespace MiniZinc {
         m.insert(e,c);
         m.insert(c,c);
         c->ti(static_cast<TypeInst*>(copy(env,m,vd->ti(),followIds,copyFundecls,isFlatModel)));
-        c->e(copy(env,m,vd->e(),followIds,copyFundecls,isFlatModel));
+        c->setRHS(copy(env,m,vd->e(),followIds,copyFundecls,isFlatModel));
         c->type(c->ti()->type());
         c->id()->type(c->type());
         ret = c;

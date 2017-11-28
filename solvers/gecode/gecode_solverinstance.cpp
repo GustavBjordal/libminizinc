@@ -1299,7 +1299,7 @@ namespace MiniZinc {
               } else {
                 nvd->type(Type::parint());
                 nvd->ti(new TypeInst(nvd->loc(), Type::parint()));
-                nvd->e(IntLit::a(l));
+                nvd->setRHS(IntLit::a(l));
               }
             } else if(!(l == Gecode::Int::Limits::min || u == Gecode::Int::Limits::max)){
               if(_only_range_domains && !holes) {
@@ -1319,7 +1319,7 @@ namespace MiniZinc {
               } else {
                 nvd->type(Type::parbool());
                 nvd->ti(new TypeInst(nvd->loc(), Type::parbool()));
-                nvd->e(new BoolLit(nvd->loc(), l));
+                nvd->setRHS(new BoolLit(nvd->loc(), l));
               }
             }
 #ifdef GECODE_HAS_FLOAT_VAR

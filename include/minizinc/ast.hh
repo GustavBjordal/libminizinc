@@ -1031,7 +1031,7 @@ namespace MiniZinc {
     /// Access initialisation expression
     Expression* e(void) const;
     /// Set initialisation expression
-    void e(Expression* rhs);
+    void setRHS(Expression* rhs);
     /// Access flattened version
     VarDecl* flat(void) { return _flat() ? _flat()->cast<VarDecl>() : NULL; }
     /// Set flattened version
