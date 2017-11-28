@@ -332,7 +332,7 @@ namespace MiniZinc {
             t.ti(Type::TI_PAR);
           }
           makePar(env,nvi->e());
-          nvi->e()->ti()->domain(NULL);
+          nvi->e()->ti()->setDomain(NULL);
           nvi->e()->flat(vd->flat());
           ClearAnnotations::run(nvi->e());
           nvi->e()->introduced(false);
@@ -704,7 +704,7 @@ namespace MiniZinc {
           
           Type t = vdi_copy->e()->ti()->type();
           t.ti(Type::TI_PAR);
-          vdi_copy->e()->ti()->domain(NULL);
+          vdi_copy->e()->ti()->setDomain(NULL);
           vdi_copy->e()->flat(vdi->e()->flat());
           vdi_copy->e()->ann().clear();
           vdi_copy->e()->introduced(false);

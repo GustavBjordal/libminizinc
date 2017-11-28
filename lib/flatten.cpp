@@ -314,6 +314,11 @@ namespace MiniZinc {
     }
   }
   
+  void EnvI::flat_changeDomain(VarDecl* vd, Expression* newDomain, bool computedDomain) {
+    vd->ti()->setDomain(newDomain);
+    vd->ti()->setComputedDomain(computedDomain);
+  }
+  
   void EnvI::flat_removeItem(MiniZinc::Item* i) {
     i->remove();
   }
@@ -851,10 +856,9 @@ namespace MiniZinc {
           Ranges::Const<IntVal> cr(lb,IntVal::infinity());
           Ranges::Inter<IntVal,IntSetRanges,Ranges::Const<IntVal> > i(dr,cr);
           IntSetVal* newibv = IntSetVal::ai(i);
-          id->decl()->ti()->domain(new SetLit(Location().introduce(), newibv));
-          id->decl()->ti()->setComputedDomain(false);
+          env.flat_changeDomain(id->decl(), new SetLit(Location().introduce(), newibv), false);
         } else {
-          id->decl()->ti()->domain(new SetLit(Location().introduce(), IntSetVal::a(lb,IntVal::infinity())));
+          env.flat_changeDomain(id->decl(),new SetLit(Location().introduce(), IntSetVal::a(lb,IntVal::infinity())), id->decl()->ti()->computedDomain());
         }
         return false;
       } else if (e1->type().ispar() && e0->isa<Id>()) {
@@ -873,10 +877,9 @@ namespace MiniZinc {
           Ranges::Const<IntVal> cr(-IntVal::infinity(), ub);
           Ranges::Inter<IntVal,IntSetRanges,Ranges::Const<IntVal> > i(dr,cr);
           IntSetVal* newibv = IntSetVal::ai(i);
-          id->decl()->ti()->domain(new SetLit(Location().introduce(), newibv));
-          id->decl()->ti()->setComputedDomain(false);
+          env.flat_changeDomain(id->decl(), new SetLit(Location().introduce(), newibv), false);
         } else {
-          id->decl()->ti()->domain(new SetLit(Location().introduce(), IntSetVal::a(-IntVal::infinity(), ub)));
+          env.flat_changeDomain(id->decl(), new SetLit(Location().introduce(), IntSetVal::a(-IntVal::infinity(), ub)), id->decl()->ti()->computedDomain());
         }
       }
     } else if (c->id()==constants().ids.int_.lin_le) {
@@ -908,10 +911,9 @@ namespace MiniZinc {
             Ranges::Const<IntVal> cr(lb, ub);
             Ranges::Inter<IntVal,IntSetRanges,Ranges::Const<IntVal> > i(dr,cr);
             IntSetVal* newibv = IntSetVal::ai(i);
-            id->decl()->ti()->domain(new SetLit(Location().introduce(), newibv));
-            id->decl()->ti()->setComputedDomain(false);
+            env.flat_changeDomain(id->decl(), new SetLit(Location().introduce(), newibv), false);
           } else {
-            id->decl()->ti()->domain(new SetLit(Location().introduce(), IntSetVal::a(lb, ub)));
+            env.flat_changeDomain(id->decl(), new SetLit(Location().introduce(), IntSetVal::a(lb, ub)), id->decl()->ti()->computedDomain());
           }
           return false;
         }
@@ -972,7 +974,7 @@ namespace MiniZinc {
                 GCLock lock;
                 env.flat_addItem(new ConstraintI(Location().introduce(),constants().lit_false));
               } else {
-                id->decl()->ti()->domain(constants().lit_false);
+                env.flat_changeDomain(id->decl(), constants().lit_false, id->decl()->ti()->computedDomain());
                 GCLock lock;
                 std::vector<Expression*> args(2);
                 args[0] = id;
@@ -1017,7 +1019,7 @@ namespace MiniZinc {
                 GCLock lock;
                 env.flat_addItem(new ConstraintI(Location().introduce(),constants().lit_false));
               } else if (id->decl()->ti()->domain()==NULL) {
-                id->decl()->ti()->domain(constants().lit_true);
+                env.flat_changeDomain(id->decl(), constants().lit_true, id->decl()->ti()->computedDomain());
                 GCLock lock;
                 std::vector<Expression*> args(2);
                 args[0] = id;
@@ -1138,6 +1140,7 @@ namespace MiniZinc {
               if (ibv) {
                 Id* id = vd->id();
                 while (id != NULL) {
+                  bool computedDomain = id->decl()->ti()->computedDomain();
                   if (id->decl()->ti()->domain()) {
                     IntSetVal* domain = eval_intset(env,id->decl()->ti()->domain());
                     IntSetRanges dr(domain);
@@ -1145,17 +1148,17 @@ namespace MiniZinc {
                     Ranges::Inter<IntVal,IntSetRanges,IntSetRanges> i(dr,ibr);
                     IntSetVal* newibv = IntSetVal::ai(i);
                     if (ibv->card() == newibv->card()) {
-                      id->decl()->ti()->setComputedDomain(true);
+                      computedDomain = true;
                     } else {
                       ibv = newibv;
                     }
                   } else {
-                    id->decl()->ti()->setComputedDomain(true);
+                    computedDomain = true;
                   }
                   if (id->type().st()==Type::ST_PLAIN && ibv->size()==0) {
                     env.fail();
                   } else {
-                    id->decl()->ti()->domain(new SetLit(Location().introduce(),ibv));
+                    env.flat_changeDomain(id->decl(), new SetLit(Location().introduce(),ibv), computedDomain);
                   }
                   id = id->decl()->e() ? id->decl()->e()->dyn_cast<Id>() : NULL;
                 }
@@ -1168,21 +1171,22 @@ namespace MiniZinc {
               if (fb.valid) {
                 Id* id = vd->id();
                 while (id != NULL) {
+                  bool computedDomain = id->decl()->ti()->computedDomain();
                   if (id->decl()->ti()->domain()) {
                     FloatSetVal* domain = eval_floatset(env,id->decl()->ti()->domain());
                     FloatSetVal* ndomain = LinearTraits<FloatLit>::intersect_domain(domain, fb.l, fb.u);
                     if (ibv && ndomain==domain) {
-                      id->decl()->ti()->setComputedDomain(true);
+                      computedDomain = true;
                     } else {
                       ibv = ndomain;
                     }
                   } else {
-                    id->decl()->ti()->setComputedDomain(true);
+                    computedDomain = true;
                   }
                   if (LinearTraits<FloatLit>::domain_empty(ibv)) {
                     env.fail();
                   } else {
-                    id->decl()->ti()->domain(new SetLit(Location(), ibv));
+                    env.flat_changeDomain(id->decl(), new SetLit(Location(), ibv), computedDomain);
                   }
                   id = id->decl()->e() ? id->decl()->e()->dyn_cast<Id>() : NULL;
                 }
@@ -1221,8 +1225,7 @@ namespace MiniZinc {
                 return vd->id();
               }
             } else {
-              vd->ti()->domain(vd->e());
-              vd->ti()->setComputedDomain(true);
+              env.flat_changeDomain(vd, vd->e(), true);
             }
             if (didRewrite) {
               return vd->id();
@@ -1240,7 +1243,7 @@ namespace MiniZinc {
                     if (Id* id = al->v()[i]->dyn_cast<Id>()) {
                       VarDecl* vdi = id->decl();
                       if (vdi->ti()->domain()==NULL) {
-                        vdi->ti()->domain(vd->ti()->domain());
+                        env.flat_changeDomain(vdi, vd->ti()->domain(), vdi->ti()->computedDomain());
                       } else {
                         IntSetVal* vdi_dom = eval_intset(env, vdi->ti()->domain());
                         IntSetRanges isvr(isv);
@@ -1253,8 +1256,7 @@ namespace MiniZinc {
                           IntSetRanges vdi_domr2(vdi_dom);
                           IntSetRanges newdomr(newdom);
                           if (!Ranges::equal(vdi_domr2, newdomr)) {
-                            vdi->ti()->domain(new SetLit(Location().introduce(),newdom));
-                            vdi->ti()->setComputedDomain(false);
+                            env.flat_changeDomain(vdi, new SetLit(Location().introduce(),newdom), false);
                           }
                         }
                       }
@@ -1266,7 +1268,7 @@ namespace MiniZinc {
                     if (Id* id = al->v()[i]->dyn_cast<Id>()) {
                       VarDecl* vdi = id->decl();
                       if (vdi->ti()->domain()==NULL) {
-                        vdi->ti()->domain(vd->ti()->domain());
+                        env.flat_changeDomain(vdi, vd->ti()->domain(), vdi->ti()->computedDomain());
                       } else {
                         FloatSetVal* vdi_dom = eval_floatset(env, vdi->ti()->domain());
                         FloatSetRanges fsvr(fsv);
@@ -1279,8 +1281,7 @@ namespace MiniZinc {
                           FloatSetRanges vdi_domr2(vdi_dom);
                           FloatSetRanges newdomr(newdom);
                           if (!Ranges::equal(vdi_domr2, newdomr)) {
-                            vdi->ti()->domain(new SetLit(Location().introduce(),newdom));
-                            vdi->ti()->setComputedDomain(false);
+                            env.flat_changeDomain(vdi, new SetLit(Location().introduce(),newdom), false);
                           }
                         }
                       }
@@ -1338,7 +1339,7 @@ namespace MiniZinc {
               if (vd->ti()->domain()) {
                 GCLock lock;
                 Expression* vd_dom = eval_par(env, vd->ti()->domain());
-                vde_id->decl()->ti()->domain(vd_dom);
+                env.flat_changeDomain(vde_id->decl(), vd_dom, vde_id->decl()->ti()->computedDomain());
               }
             } else if (vd->e() && vd->e()->type().bt()==Type::BT_INT && vd->e()->type().dim()==0) {
               GCLock lock;
@@ -1368,6 +1369,7 @@ namespace MiniZinc {
                 }
               }
               if (ibv) {
+                bool computedDomain = vd->ti()->computedDomain();
                 if (vd->ti()->domain()) {
                   IntSetVal* domain = eval_intset(env,vd->ti()->domain());
                   IntSetRanges dr(domain);
@@ -1375,15 +1377,15 @@ namespace MiniZinc {
                   Ranges::Inter<IntVal,IntSetRanges,IntSetRanges> i(dr,ibr);
                   IntSetVal* newibv = IntSetVal::ai(i);
                   if (ibv->card() == newibv->card()) {
-                    vd->ti()->setComputedDomain(true);
+                    computedDomain = true;
                   } else {
                     ibv = newibv;
                   }
                 } else {
-                  vd->ti()->setComputedDomain(true);
+                  computedDomain = true;
                 }
                 SetLit* ibv_l = new SetLit(Location().introduce(),ibv);
-                vd->ti()->domain(ibv_l);
+                env.flat_changeDomain(vd, ibv_l, computedDomain);
                 if (vd->type().isopt()) {
                   std::vector<Expression*> args(2);
                   args[0] = vd->id();
@@ -1414,7 +1416,7 @@ namespace MiniZinc {
                   GCLock lock;
                   env.flat_addItem(new ConstraintI(Location().introduce(),constants().lit_false));
                 } else {
-                  id->decl()->ti()->domain(e);
+                  env.flat_changeDomain(id->decl(), e, id->decl()->ti()->computedDomain());
                   GCLock lock;
                   std::vector<Expression*> args(2);
                   args[0] = id;
@@ -2169,7 +2171,7 @@ namespace MiniZinc {
           }
         }
         SetLit* r_dom = new SetLit(Location().introduce(), IntSetVal::a(lb,ub));
-        nr->ti()->domain(r_dom);
+        env.flat_changeDomain(nr, r_dom, nr->ti()->computedDomain());
       }
     } else if (r_bounds_valid_set && ite->e_else()->type().isintset()) {
       IntSetVal* isv_else = compute_intset_bounds(env, ite->e_else());
@@ -2191,7 +2193,7 @@ namespace MiniZinc {
           }
         }
         SetLit* r_dom = new SetLit(Location().introduce(),isv);
-        nr->ti()->domain(r_dom);
+        env.flat_changeDomain(nr, r_dom, nr->ti()->computedDomain());
       }
     } else if (r_bounds_valid_float && ite->e_else()->type().isfloat()) {
       FloatBounds fb_else = compute_float_bounds(env, ite->e_else());
@@ -2211,7 +2213,7 @@ namespace MiniZinc {
         }
         BinOp* r_dom = new BinOp(Location().introduce(), FloatLit::a(lb), BOT_DOTDOT, FloatLit::a(ub));
         r_dom->type(Type::parfloat(1));
-        nr->ti()->domain(r_dom);
+        env.flat_changeDomain(nr, r_dom, nr->ti()->computedDomain());
       }
     }
     
@@ -2444,16 +2446,14 @@ namespace MiniZinc {
           typename LinearTraits<Lit>::Domain domain = LinearTraits<Lit>::eval_domain(env,vd->ti()->domain());
           if (LinearTraits<Lit>::domain_contains(domain,d)) {
             if (!LinearTraits<Lit>::domain_equals(domain,d)) {
-              vd->ti()->setComputedDomain(false);
-              vd->ti()->domain(LinearTraits<Lit>::new_domain(d));
+              env.flat_changeDomain(vd, LinearTraits<Lit>::new_domain(d), false);
             }
             ret.r = bind(env,ctx,r,constants().lit_true);
           } else {
             ret.r = bind(env,ctx,r,constants().lit_false);
           }
         } else {
-          vd->ti()->setComputedDomain(false);
-          vd->ti()->domain(LinearTraits<Lit>::new_domain(d));
+          env.flat_changeDomain(vd, LinearTraits<Lit>::new_domain(d), false);
           ret.r = bind(env,ctx,r,constants().lit_true);
         }
       } else {
@@ -2501,8 +2501,7 @@ namespace MiniZinc {
               return;
             } else if (!LinearTraits<Lit>::domain_equals(domain,ndomain)) {
               ret.r = bind(env,ctx,r,constants().lit_true);
-              vd->ti()->setComputedDomain(false);
-              vd->ti()->domain(LinearTraits<Lit>::new_domain(ndomain));
+              env.flat_changeDomain(vd, LinearTraits<Lit>::new_domain(ndomain), false);
 
               if (r==constants().var_true) {
                 BinOp* bo = new BinOp(Location().introduce(), e0, bot, e1);
@@ -2586,15 +2585,13 @@ namespace MiniZinc {
             if (LinearTraits<Lit>::domain_intersects(domain,bounds.l,bounds.u)) {
               typename LinearTraits<Lit>::Domain new_domain = LinearTraits<Lit>::intersect_domain(domain,bounds.l,bounds.u);
               if (!LinearTraits<Lit>::domain_equals(domain,new_domain)) {
-                vd->ti()->setComputedDomain(false);
-                vd->ti()->domain(LinearTraits<Lit>::new_domain(new_domain));
+                env.flat_changeDomain(vd, LinearTraits<Lit>::new_domain(new_domain), false);
               }
             } else {
               ret.r = bind(env,ctx,r,constants().lit_false);
             }
           } else {
-            vd->ti()->setComputedDomain(true);
-            vd->ti()->domain(LinearTraits<Lit>::new_domain(bounds.l,bounds.u));
+            env.flat_changeDomain(vd, LinearTraits<Lit>::new_domain(bounds.l,bounds.u), true);
           }
         }
       }
@@ -4407,7 +4404,7 @@ namespace MiniZinc {
               /// TODO: check for float
               VarDecl* vd = e0.r()->cast<Id>()->decl();
               if (vd->ti()->domain()==NULL) {
-                vd->ti()->domain(e1.r());
+                env.flat_changeDomain(vd, e1.r(), vd->ti()->computedDomain());
               } else {
                 GCLock lock;
                 IntSetVal* newdom = eval_intset(env,e1.r());
@@ -4430,8 +4427,7 @@ namespace MiniZinc {
                   if (id->type().st()==Type::ST_PLAIN && newdom->size()==0) {
                     env.fail();
                   } else if (changeDom) {
-                    id->decl()->ti()->setComputedDomain(false);
-                    id->decl()->ti()->domain(new SetLit(Location().introduce(),newdom));
+                    env.flat_changeDomain(id->decl(), new SetLit(Location().introduce(),newdom), false);
                     if (id->decl()->e()==NULL && newdom->min()==newdom->max()) {
                       id->decl()->e(IntLit::a(newdom->min()));
                     }
@@ -5235,7 +5231,7 @@ namespace MiniZinc {
                 for (unsigned int i=0; i<al->v().size(); i++) {
                   if (Id* ali_id = al->v()[i]->dyn_cast<Id>()) {
                     if (ali_id->decl()->ti()->domain()==NULL) {
-                      ali_id->decl()->ti()->domain(vd->ti()->domain());
+                      env.flat_changeDomain(ali_id->decl(), vd->ti()->domain(), ali_id->decl()->ti()->computedDomain());
                     }
                   }
                 }
@@ -5444,8 +5440,7 @@ namespace MiniZinc {
                 ub = std::max(ub, vi);
               }
               GCLock lock;
-              v->e()->ti()->domain(new SetLit(Location().introduce(), IntSetVal::a(lb, ub)));
-              v->e()->ti()->setComputedDomain(true);
+              env.flat_changeDomain(v->e(), new SetLit(Location().introduce(), IntSetVal::a(lb, ub)), true);
             } else if (v->e()->type().bt()==Type::BT_FLOAT && v->e()->type().st()==Type::ST_PLAIN) {
               FloatVal lb = FloatVal::infinity();
               FloatVal ub = -FloatVal::infinity();
@@ -5455,8 +5450,7 @@ namespace MiniZinc {
                 ub = std::max(ub, vi);
               }
               GCLock lock;
-              v->e()->ti()->domain(new SetLit(Location().introduce(), FloatSetVal::a(lb, ub)));
-              v->e()->ti()->setComputedDomain(true);
+              env.flat_changeDomain(v->e(), new SetLit(Location().introduce(), FloatSetVal::a(lb, ub)), true);
             }
           }
           if (v->e()->type().isvar() || v->e()->type().isann()) {
@@ -5629,7 +5623,7 @@ namespace MiniZinc {
             }
           }
           if (vdi && keptVariable && vdi->e()->type().dim() > 0 && vdi->e()->type().isvar()) {
-            vdi->e()->ti()->domain(NULL);
+            vdi->e()->ti()->setDomain(NULL);
           }
           if (vdi && keptVariable &&
               vdi->e()->type().isint() && vdi->e()->type().isvar() &&
@@ -5646,7 +5640,7 @@ namespace MiniZinc {
             if (needRangeDomain) {
               if (dom->min(0).isMinusInfinity() || dom->max(dom->size()-1).isPlusInfinity()) {
                 TypeInst* nti = copy(env,vdi->e()->ti())->cast<TypeInst>();
-                nti->domain(NULL);
+                nti->setDomain(NULL);
                 vdi->e()->ti(nti);
                 if (dom->min(0).isFinite()) {
                   std::vector<Expression*> args(2);
@@ -5668,7 +5662,7 @@ namespace MiniZinc {
               } else if (dom->size() > 1) {
                 SetLit* newDom = new SetLit(Location().introduce(),IntSetVal::a(dom->min(0),dom->max(dom->size()-1)));
                 TypeInst* nti = copy(env,vdi->e()->ti())->cast<TypeInst>();
-                nti->domain(newDom);
+                nti->setDomain(newDom);
                 vdi->e()->ti(nti); /// TODO: WHY WAS THIS COMMENTED OUT IN DEBUG???
               }
               if (dom->size() > 1) {
@@ -5698,9 +5692,9 @@ namespace MiniZinc {
             FloatVal vmin = vdi_dom->min();
             FloatVal vmax = vdi_dom->max();
             if (vmin == -FloatVal::infinity() && vmax == FloatVal::infinity()) {
-              vdi->e()->ti()->domain(NULL);
+              vdi->e()->ti()->setDomain(NULL);
             } else if (vmin == -FloatVal::infinity()) {
-              vdi->e()->ti()->domain(NULL);
+              vdi->e()->ti()->setDomain(NULL);
               std::vector<Expression*> args(2);
               args[0] = vdi->e()->id();
               args[1] = FloatLit::a(vmax);
@@ -5709,7 +5703,7 @@ namespace MiniZinc {
               call->decl(env.orig->matchFn(env, call, false));
               env.flat_addItem(new ConstraintI(Location().introduce(), call));
             } else if (vmax == FloatVal::infinity()) {
-              vdi->e()->ti()->domain(NULL);
+              vdi->e()->ti()->setDomain(NULL);
               std::vector<Expression*> args(2);
               args[0] = FloatLit::a(vmin);
               args[1] = vdi->e()->id();
@@ -5720,7 +5714,7 @@ namespace MiniZinc {
             } else if (vdi_dom->size() > 1) {
               BinOp* dom_ranges = new BinOp(vdi->e()->ti()->domain()->loc().introduce(),
                                             FloatLit::a(vmin), BOT_DOTDOT, FloatLit::a(vmax));
-              vdi->e()->ti()->domain(dom_ranges);
+              vdi->e()->ti()->setDomain(dom_ranges);
               
               std::vector<Expression*> ranges;
               for (FloatSetRanges vdi_r(vdi_dom); vdi_r(); ++vdi_r) {
@@ -6041,7 +6035,7 @@ namespace MiniZinc {
     if (vd->type().ispar()) {
       vd->ann().clear();
       vd->introduced(false);
-      vd->ti()->domain(NULL);
+      vd->ti()->setDomain(NULL);
     }
     
     // Remove boolean context annotations used only on compilation
@@ -6065,7 +6059,7 @@ namespace MiniZinc {
         // Store RHS
         Expression* ve = vd->e();
         vd->e(constants().lit_true);
-        vd->ti()->domain(NULL);
+        vd->ti()->setDomain(NULL);
         // Ex: var bool: b = true
         
         // If vd had a RHS
@@ -6161,7 +6155,7 @@ namespace MiniZinc {
           }
         }
         if (Expression::equal(vd->ti()->domain(),constants().lit_false)) {
-          vd->ti()->domain(NULL);
+          vd->ti()->setDomain(NULL);
           vd->e(constants().lit_false);
         }
       }
@@ -6275,7 +6269,7 @@ namespace MiniZinc {
       al->setDims(ASTIntVec(dims));
       IntSetVal* isv = IntSetVal::a(1,al->length());
       if (vd->ti()->ranges().size() == 1) {
-        vd->ti()->ranges()[0]->domain(new SetLit(Location().introduce(),isv));
+        vd->ti()->ranges()[0]->setDomain(new SetLit(Location().introduce(),isv));
       } else {
         std::vector<TypeInst*> r(1);
         r[0] = new TypeInst(vd->ti()->ranges()[0]->loc(),

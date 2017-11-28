@@ -1295,7 +1295,7 @@ namespace MiniZinc {
 
             if(l==u) {
               if(nvd->e()) {
-                nvd->ti()->domain(new SetLit(nvd->loc(), IntSetVal::a(l, u)));
+                nvd->ti()->setDomain(new SetLit(nvd->loc(), IntSetVal::a(l, u)));
               } else {
                 nvd->type(Type::parint());
                 nvd->ti(new TypeInst(nvd->loc(), Type::parint()));
@@ -1303,10 +1303,10 @@ namespace MiniZinc {
               }
             } else if(!(l == Gecode::Int::Limits::min || u == Gecode::Int::Limits::max)){
               if(_only_range_domains && !holes) {
-                nvd->ti()->domain(new SetLit(nvd->loc(), IntSetVal::a(l, u)));
+                nvd->ti()->setDomain(new SetLit(nvd->loc(), IntSetVal::a(l, u)));
               } else {
                 IntVarRanges ivr(intvar);
-                nvd->ti()->domain(new SetLit(nvd->loc(), IntSetVal::ai(ivr)));
+                nvd->ti()->setDomain(new SetLit(nvd->loc(), IntSetVal::ai(ivr)));
               }
             }
           } else if(bt == Type::BaseType::BT_BOOL) {
@@ -1315,7 +1315,7 @@ namespace MiniZinc {
                 u = boolvar.max();
             if(l == u) {
               if(nvd->e()) {
-                nvd->ti()->domain(constants().boollit(l));
+                nvd->ti()->setDomain(constants().boollit(l));
               } else {
                 nvd->type(Type::parbool());
                 nvd->ti(new TypeInst(nvd->loc(), Type::parbool()));

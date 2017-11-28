@@ -1119,7 +1119,7 @@ namespace MiniZinc {
     /// Access domain
     Expression* domain(void) const { return _domain; }
     //// Set domain
-    void domain(Expression* d) { _domain = d; }
+    void setDomain(Expression* d) { _domain = d; }
     
     /// Set ranges to \a ranges
     void setRanges(const std::vector<TypeInst*>& ranges);

@@ -120,6 +120,7 @@ namespace MiniZinc {
     void flat_addItem(Item* i);
     void flat_removeItem(int i);
     void flat_removeItem(Item* i);
+    void flat_changeDomain(VarDecl* vd, Expression* newDomain, bool computedDomain);
     void vo_add_exp(VarDecl* vd);
     void fail(void);
     bool failed(void) const;

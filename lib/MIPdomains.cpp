@@ -1451,7 +1451,7 @@ namespace MiniZinc {
 //           if ( 0.0==lb && 0.0==ub ) {
             BinOp* newDom = new BinOp(Location().introduce(),
                                       FloatLit::a(lb), BOT_DOTDOT, FloatLit::a(ub));
-            vd->ti()->domain(newDom);
+            mipd.__env->envi().flat_changeDomain(vd, newDom, vd->ti()->computedDomain());
             DBGOUT_MIPD( "  NULL OUT:  " << vd->id()->str() );
 //           }
         }
@@ -1460,7 +1460,7 @@ namespace MiniZinc {
           SetLit* newDom = new SetLit(Location().introduce(),IntSetVal::a( lb, ub ));
   //           TypeInst* nti = copy(mipd.getEnv()->envi(),varFlag->ti())->cast<TypeInst>();
   //           nti->domain(newDom);
-          vd->ti()->domain(newDom);
+          mipd.__env->envi().flat_changeDomain(vd, newDom, vd->ti()->computedDomain());
         } else
           MZN_MIPD__assert_hard_msg( 0, "Unknown var type " );
       }
