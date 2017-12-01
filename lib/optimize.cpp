@@ -537,7 +537,8 @@ namespace MiniZinc {
                       }
                     }
                   }
-                } else if (!isTrue && (c->id()==constants().ids.exists || c->id()==constants().ids.clause)) {
+                }
+                else if (!isTrue && (c->id()==constants().ids.exists || c->id()==constants().ids.clause)) {
                   remove = true;
                   for (unsigned int i=0; i<c->args().size(); i++) {
                     bool ispos = i==0;

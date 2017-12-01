@@ -28,6 +28,7 @@ function ann: swap(var bool, var bool);
 function ann: from(array[int] of ann);
 function ann: from(array[int] of var opt ann);
 function ann: initialize(var bool);
+function ann: initialize(ann);
 function ann: forall(array[int] of ann: X) = neighbourhood_and(X);
 function ann: '/\' (ann:x,ann:y);
 function ann: '\/' (ann:x,ann:y);

@@ -20,3 +20,5 @@ libminizinc.xcodeproj
 *.bak
 *.out
 *.err
+
+\.DS_Store

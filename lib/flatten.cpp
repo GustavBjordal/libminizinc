@@ -2392,7 +2392,8 @@ namespace MiniZinc {
       ees[2].b = constants().boollit(result);
       ret.r = conj(env,r,ctx,ees);
       return;
-    } else if (coeffv.size()==1 &&
+    }
+    else if (coeffv.size()==1 &&
                std::abs(coeffv[0])==1) {
       if (coeffv[0]==-1) {
         switch (bot) {
@@ -3095,6 +3096,9 @@ namespace MiniZinc {
       }
       return ret;
     }
+    Printer p(std::cerr, 120);
+    std::cerr << "Flat_exp on " << e->eid() << " ";
+    p.print(e);
     switch (e->eid()) {
     case Expression::E_INTLIT:
     case Expression::E_FLOATLIT:
@@ -4343,9 +4347,7 @@ namespace MiniZinc {
             bool inRootCtx = (ctx0.b==ctx1.b && ctx0.b==C_ROOT && b==constants().var_true);
             EE e0 = flat_exp(env,ctx0,boe0,NULL,inRootCtx ? b : NULL);
             EE e1 = flat_exp(env,ctx1,boe1,NULL,inRootCtx ? b : NULL);
-            
-            ret.b = bind(env,Ctx(),b,constants().lit_true);
-            
+          
             std::vector<EE> ees(3);
             ees[0].b = e0.b; ees[1].b = e1.b;
 
@@ -4428,6 +4430,8 @@ namespace MiniZinc {
             }
             if (le1) {
               if (boe0->type().isint()) {
+                p.print(le0);
+                p.print(le1);
                 flatten_linexp_binop<IntLit>(env,ctx,r,b,ret,le0,le1,bot,doubleNeg,ees,args,callid);
               } else {
                 flatten_linexp_binop<FloatLit>(env,ctx,r,b,ret,le0,le1,bot,doubleNeg,ees,args,callid);
@@ -6383,7 +6387,6 @@ namespace MiniZinc {
   
   void oldflatzinc(Env& e) {
     Model* m = e.flat();
-
     // Mark annotations and optional variables for removal
     for (unsigned int i=0; i<m->size(); i++) {
       Item* item = (*m)[i];
@@ -6609,7 +6612,21 @@ namespace MiniZinc {
     env.push_expr_map();
     
     int originalSize = env.flat()->size();
-    EE result = flat_exp(env, Ctx(), call, NULL, constants().var_true);
+    
+    Ctx c = ctx;
+    c.b = BCtx::C_POS;
+    EE result = flat_exp(env, c, call, NULL, constants().var_true);
+    
+    /*Printer p(std::cerr, 300);
+    std::cerr << "---------------create_flat_function_from_call " << std::endl;
+    p.print(env.flat());
+    std::cerr << "-------------optimize" << std::endl;
+    
+    optimize(e);
+    p.print(env.flat());
+    std::cerr << "-------------optimize done" << std::endl;
+    */
+    
     int newSize = env.flat()->size();
     std::vector<Expression*> letBody;
     for (int i = originalSize; i < env.flat()->size(); i++) {
@@ -6625,7 +6642,7 @@ namespace MiniZinc {
     }
     
     env.pop_expr_map();
-    std::cerr << "Removing arguments from function definition" << std::endl;
+    std::cerr << "Removed arguments from function definition" << std::endl;
     ASTExprVec<VarDecl> noParams;
     
     return new FunctionI(loc,callName, type, noParams, new Let(loc, letBody, result.r()));
@@ -6669,6 +6686,11 @@ namespace MiniZinc {
         std::cerr << "Removing arguments from function call" << std::endl;
         targetCall->args(NULL);
         std::cerr << std::endl;
+        
+        std::cerr << "---------------Printing modelwhile creating function - " << callNumber << std::endl;
+        p.print(env.flat());
+        std::cerr << "-------------Printing model while creating functions done" << std::endl;
+        
         
       }
       //Remove new flatzinc stuff
