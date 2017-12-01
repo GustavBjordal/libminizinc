@@ -7,19 +7,19 @@ project (libminizinc CXX C)
 # ---- For example, to produce mzn-gecode run "cd build; cmake -D GECODE_HOME=$GECODE_HOME ..; cmake --build ."  ----
 # -------------------------------------------------------------------------------------------------------------------
 set(HAS_FZN    TRUE)                 ### Always compile the mzn-fzn driver
-if (DEFINED GECODE_HOME)
+if (DEFINED GECODE_HOME AND NOT "${GECODE_HOME} " STREQUAL " ")
   set(HAS_GECODE TRUE)
 endif()
-if (DEFINED CPLEX_STUDIO_DIR)
+if (DEFINED CPLEX_STUDIO_DIR AND NOT "${CPLEX_STUDIO_DIR} " STREQUAL " ")
   set(HAS_CPLEX TRUE)
 endif()
-if(DEFINED GUROBI_HOME)
+if(DEFINED GUROBI_HOME AND NOT "${GUROBI_HOME} " STREQUAL " ")
   set(HAS_GUROBI TRUE)
 endif()
-if (DEFINED SCIP_DIR AND DEFINED SOPLEX_DIR AND DEFINED ZIMPL_DIR)
+if (DEFINED SCIP_DIR AND DEFINED SOPLEX_DIR AND DEFINED ZIMPL_DIR AND NOT "${SCIP_DIR} " STREQUAL " ")
   set(HAS_SCIP TRUE)                     # Can use SCIP w/o ZIMPL too
 endif()
-if (DEFINED OSICBC_HOME)
+if (DEFINED OSICBC_HOME AND NOT "${OSICBC_HOME} " STREQUAL " ")
   set(HAS_OSICBC TRUE)
 endif()
 
@@ -27,7 +27,7 @@ endif()
 # The version number.
 set (libminizinc_VERSION_MAJOR 2)
 set (libminizinc_VERSION_MINOR 1)
-set (libminizinc_VERSION_PATCH 4)
+set (libminizinc_VERSION_PATCH 6)
 
 if (ADDITIONAL_DATE_STRING)
   set (libminizinc_VERSION_PATCH "${libminizinc_VERSION_PATCH}.${ADDITIONAL_DATE_STRING}")
@@ -341,7 +341,7 @@ find_package ( Threads REQUIRED )
 
 # -------------------------------------------------------------------------------------------------------------------
 # -------------------------------------------------------------------------------------------------------------------
-if(HAS_GUROBI)  # Version 6.5
+if(HAS_GUROBI)  # Version 7.5
 
 	add_library(minizinc_gurobi
     solvers/MIP/MIP_solverinstance.cpp solvers/MIP/MIP_gurobi_wrap.cpp include/minizinc/solvers/MIP/MIP_gurobi_wrap.hh
@@ -351,7 +351,7 @@ if(HAS_GUROBI)  # Version 6.5
     target_link_libraries(minizinc_gurobi minizinc ${NEEDS_LIBDL} ${CMAKE_THREAD_LIBS_INIT})
   else()
     link_directories("${GUROBI_HOME}/lib")
-    target_link_libraries(minizinc_gurobi minizinc gurobi70 ${CMAKE_THREAD_LIBS_INIT})
+    target_link_libraries(minizinc_gurobi minizinc gurobi75 ${CMAKE_THREAD_LIBS_INIT})
   endif()
 
 	add_executable(mzn-gurobi minizinc.cpp)
@@ -526,7 +526,8 @@ if(HAS_SCIP_SEPLIBS)
 endif()
 
 # -------------------------------------------------------------------------------------------------------------------
-if(HAS_OSICBC)  # Tested version 2.9.8, rev 2329. Use svn/git to get the latest revision, see https://projects.coin-or.org/Cbc
+if(HAS_OSICBC)  
+  ### Tested version 2.9.9, rev 2345 on 12.10.17 from the stable snapshot https://projects.coin-or.org/svn/Cbc/stable/2.9
 
   if (EXISTS "${OSICBC_HOME}/include/coin/" AND EXISTS "${OSICBC_HOME}/lib")
     set(CBC_INCLUDEDIRS "${OSICBC_HOME}/include/coin/")

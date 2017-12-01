@@ -221,23 +221,26 @@ namespace MiniZinc {
       return alloc(size);
     }
 
+    void trigger(void) {
+#ifdef MINIZINC_GC_STATS
+      std::cerr << "GC\n\talloced " << (_alloced_mem/1024) << "\n\tfree " << (_free_mem/1024) << "\n\tdiff "
+      << ((_alloced_mem-_free_mem)/1024)
+      << "\n\tthreshold " << (_gc_threshold/1024)
+      << "\n";
+#endif
+      mark();
+      sweep();
+      _gc_threshold = static_cast<size_t>(_alloced_mem * 1.5);
+#ifdef MINIZINC_GC_STATS
+      std::cerr << "done\n\talloced " << (_alloced_mem/1024) << "\n\tfree " << (_free_mem/1024) << "\n\tdiff "
+      << ((_alloced_mem-_free_mem)/1024)
+      << "\n\tthreshold " << (_gc_threshold/1024)
+      << "\n";
+#endif
+    }
     void rungc(void) {
       if (_alloced_mem > _gc_threshold) {
-#ifdef MINIZINC_GC_STATS
-        std::cerr << "GC\n\talloced " << (_alloced_mem/1024) << "\n\tfree " << (_free_mem/1024) << "\n\tdiff "
-                  << ((_alloced_mem-_free_mem)/1024)
-                  << "\n\tthreshold " << (_gc_threshold/1024)
-                  << "\n";
-#endif
-        mark();
-        sweep();
-        _gc_threshold = static_cast<size_t>(_alloced_mem * 1.5);
-#ifdef MINIZINC_GC_STATS
-        std::cerr << "done\n\talloced " << (_alloced_mem/1024) << "\n\tfree " << (_free_mem/1024) << "\n\tdiff "
-                  << ((_alloced_mem-_free_mem)/1024)
-                  << "\n\tthreshold " << (_gc_threshold/1024)
-                  << "\n";
-#endif
+        trigger();
       }
     }
     void mark(void);
@@ -347,6 +350,11 @@ namespace MiniZinc {
     gc()->_lock_count--;
   }
 
+  void GC::trigger(void) {
+    if (!locked())
+      gc()->_heap->trigger();
+  }
+  
   const size_t GC::Heap::pageSize;
 
   const size_t
@@ -489,19 +497,25 @@ namespace MiniZinc {
     }
     
     bool fixPrev = false;
+    WeakRef* prevWr = NULL;
     for (WeakRef* wr = _weakRefs; wr != NULL; wr = wr->next()) {
       if (fixPrev) {
         fixPrev = false;
-        WeakRef* p = wr->_p;
-        removeWeakRef(p);
-        p->_n = p;
-        p->_p = p;
+        removeWeakRef(prevWr);
+        prevWr->_n = NULL;
+        prevWr->_p = NULL;
       }
       if ((*wr)() && (*wr)()->_gc_mark==0) {
         wr->_e = NULL;
         wr->_valid = false;
         fixPrev = true;
+        prevWr = wr;
       }
+    }
+    if (fixPrev) {
+      removeWeakRef(prevWr);
+      prevWr->_n = NULL;
+      prevWr->_p = NULL;
     }
     
     for (ASTNodeWeakMap* wr = _nodeWeakMaps; wr != NULL; wr = wr->next()) {
@@ -693,26 +707,26 @@ namespace MiniZinc {
 
   KeepAlive::KeepAlive(Expression* e)
     : _e(e), _p(NULL), _n(NULL) {
-    if (_e && !_e->isUnboxedInt())
+    if (_e && !_e->isUnboxedVal())
       GC::gc()->addKeepAlive(this);
   }
   KeepAlive::~KeepAlive(void) {
-    if (_e && !_e->isUnboxedInt())
+    if (_e && !_e->isUnboxedVal())
       GC::gc()->removeKeepAlive(this);
   }
   KeepAlive::KeepAlive(const KeepAlive& e) : _e(e._e), _p(NULL), _n(NULL) {
-    if (_e && !_e->isUnboxedInt())
+    if (_e && !_e->isUnboxedVal())
       GC::gc()->addKeepAlive(this);
   }
   KeepAlive&
   KeepAlive::operator =(const KeepAlive& e) {
-    if (_e && !_e->isUnboxedInt()) {
-      if (e._e==NULL || e._e->isUnboxedInt()) {
+    if (_e && !_e->isUnboxedVal()) {
+      if (e._e==NULL || e._e->isUnboxedVal()) {
         GC::gc()->removeKeepAlive(this);
         _p = _n = NULL;
       }
     } else {
-      if (e._e!=NULL && !e._e->isUnboxedInt())
+      if (e._e!=NULL && !e._e->isUnboxedVal())
         GC::gc()->addKeepAlive(this);
     }
     _e = e._e;
@@ -764,30 +778,35 @@ namespace MiniZinc {
 
   WeakRef::WeakRef(Expression* e)
   : _e(e), _p(NULL), _n(NULL), _valid(true) {
-    if (_e && !_e->isUnboxedInt())
+    if (_e && !_e->isUnboxedVal())
       GC::gc()->addWeakRef(this);
   }
   WeakRef::~WeakRef(void) {
-    if ((_e && !_e->isUnboxedInt()) || !_valid)
+    if (_e && !_e->isUnboxedVal())
       GC::gc()->removeWeakRef(this);
   }
   WeakRef::WeakRef(const WeakRef& e) : _e(e()), _p(NULL), _n(NULL), _valid(true) {
-    if (_e && !_e->isUnboxedInt())
+    if (_e && !_e->isUnboxedVal())
       GC::gc()->addWeakRef(this);
   }
   WeakRef&
   WeakRef::operator =(const WeakRef& e) {
-    if ((_e && !_e->isUnboxedInt()) || !_valid) {
-      if (e()==NULL || e()->isUnboxedInt()) {
+    // Test if this WeakRef is currently active in the GC
+    bool isActive = (_e && !_e->isUnboxedVal());
+    if (isActive) {
+      // Yes, active WeakRef.
+      // If after assigning WeakRef should be inactive, remove it.
+      if (e()==NULL || e()->isUnboxedVal()) {
         GC::gc()->removeWeakRef(this);
         _n = _p = NULL;
       }
-    } else {
-      if (e()!=NULL && !e()->isUnboxedInt())
-        GC::gc()->addWeakRef(this);
     }
     _e = e();
     _valid = true;
+    
+    // If this WeakRef was not active but now should be, add it
+    if (!isActive && _e!=NULL && !_e->isUnboxedVal())
+      GC::gc()->addWeakRef(this);
     return *this;
   }
 

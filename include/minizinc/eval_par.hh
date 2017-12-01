@@ -14,6 +14,7 @@
 
 #include <minizinc/model.hh>
 #include <minizinc/iter.hh>
+#include <minizinc/astexception.hh>
 
 #include <minizinc/prettyprinter.hh>
 
@@ -99,22 +100,20 @@ namespace MiniZinc {
                 IntVal i, KeepAlive in, std::vector<typename Eval::ArrayVal>& a) {
     {
       GCLock lock;
-      e->decl(gen,id)->e(IntLit::a(i));
+      e->decl(gen,id)->setRHS(IntLit::a(i));
     }
     CallStackItem csi(env, e->decl(gen,id)->id(), i);
     if (id == e->n_decls(gen)-1) {
-      if (gen == e->n_generators()-1) {
-        bool where = true;
-        if (e->where() != NULL && !e->where()->type().isvar()) {
-          GCLock lock;
-          where = eval_bool(env, e->where());
-        }
-        if (where) {
+      bool where = true;
+      if (e->where(gen) != NULL) {
+        GCLock lock;
+        where = eval_bool(env, e->where(gen));
+      }
+      if (where) {
+        if (gen == e->n_generators()-1) {
           a.push_back(eval.e(env,e->e()));
-        }
-      } else {
-        KeepAlive nextin;
-        {
+        } else {
+          KeepAlive nextin;
           if (e->in(gen+1)->type().dim()==0) {
             GCLock lock;
             nextin = new SetLit(Location(),eval_intset(env, e->in(gen+1)));
@@ -122,11 +121,11 @@ namespace MiniZinc {
             GCLock lock;
             nextin = eval_array_lit(env, e->in(gen+1));
           }
-        }
-        if (e->in(gen+1)->type().dim()==0) {
-          eval_comp_set<Eval>(env, eval,e,gen+1,0,nextin,a);
-        } else {
-          eval_comp_array<Eval>(env, eval,e,gen+1,0,nextin,a);
+          if (e->in(gen+1)->type().dim()==0) {
+            eval_comp_set<Eval>(env, eval,e,gen+1,0,nextin,a);
+          } else {
+            eval_comp_array<Eval>(env, eval,e,gen+1,0,nextin,a);
+          }
         }
       }
     } else {
@@ -140,21 +139,19 @@ namespace MiniZinc {
                   IntVal i, KeepAlive in, std::vector<typename Eval::ArrayVal>& a) {
     ArrayLit* al = in()->cast<ArrayLit>();
     CallStackItem csi(env, e->decl(gen,id)->id(), i);
-    e->decl(gen,id)->e(al->v()[i.toInt()]);
+    e->decl(gen,id)->setRHS(al->v()[i.toInt()]);
     e->rehash();
     if (id == e->n_decls(gen)-1) {
-      if (gen == e->n_generators()-1) {
-        bool where = true;
-        if (e->where() != NULL) {
-          GCLock lock;
-          where = eval_bool(env, e->where());
-        }
-        if (where) {
+      bool where = true;
+      if (e->where(gen) != NULL) {
+        GCLock lock;
+        where = eval_bool(env, e->where(gen));
+      }
+      if (where) {
+        if (gen == e->n_generators()-1) {
           a.push_back(eval.e(env,e->e()));
-        }
-      } else {
-        KeepAlive nextin;
-        {
+        } else {
+          KeepAlive nextin;
           if (e->in(gen+1)->type().dim()==0) {
             GCLock lock;
             nextin = new SetLit(Location(),eval_intset(env,e->in(gen+1)));
@@ -162,17 +159,17 @@ namespace MiniZinc {
             GCLock lock;
             nextin = eval_array_lit(env, e->in(gen+1));
           }
-        }
-        if (e->in(gen+1)->type().dim()==0) {
-          eval_comp_set<Eval>(env, eval,e,gen+1,0,nextin,a);
-        } else {
-          eval_comp_array<Eval>(env, eval,e,gen+1,0,nextin,a);
+          if (e->in(gen+1)->type().dim()==0) {
+            eval_comp_set<Eval>(env, eval,e,gen+1,0,nextin,a);
+          } else {
+            eval_comp_array<Eval>(env, eval,e,gen+1,0,nextin,a);
+          }
         }
       }
     } else {
       eval_comp_array<Eval>(env, eval,e,gen,id+1,in,a);
     }
-    e->decl(gen,id)->e(NULL);
+    e->decl(gen,id)->setRHS(NULL);
     e->decl(gen,id)->flat(NULL);
   }
 
@@ -189,6 +186,9 @@ namespace MiniZinc {
   eval_comp_set(EnvI& env, Eval& eval, Comprehension* e, int gen, int id,
                 KeepAlive in, std::vector<typename Eval::ArrayVal>& a) {
     IntSetVal* isv = eval_intset(env, in());
+    if (isv->card().isPlusInfinity()) {
+      throw EvalError(env,in()->loc(),"comprehension iterates over an infinite set");
+    }
     IntSetRanges rsi(isv);
     Ranges::ToValues<IntSetRanges> rsv(rsi);
     for (; rsv(); ++rsv) {

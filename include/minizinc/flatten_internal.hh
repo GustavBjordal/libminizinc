@@ -69,6 +69,7 @@ namespace MiniZinc {
     Model* output;
     VarOccurrences vo;
     VarOccurrences output_vo;
+    VarOccurrences output_vo_flat;
     CopyMap cmap;
     IdMap<KeepAlive> reverseMappers;
     struct WW {
@@ -134,6 +135,7 @@ namespace MiniZinc {
     void flat_addItem(Item* i);
     void flat_removeItem(int i);
     void flat_removeItem(Item* i);
+    void flat_changeDomain(VarDecl* vd, Expression* newDomain, bool computedDomain);
     void vo_add_exp(VarDecl* vd);
     void fail(void);
     bool failed(void) const;
@@ -148,6 +150,8 @@ namespace MiniZinc {
     std::ostream& evalOutput(std::ostream& os);
     void createErrorStack(void);
     Call* surroundingCall(void) const;
+
+    void cleanupExceptOutput();
     
     FunctionI* create_function(MiniZinc::Type &type, std::string name, std::vector<VarDecl*>& params, MiniZinc::Expression *body);
   };
@@ -358,8 +362,7 @@ namespace MiniZinc {
       FloatSetVal* ndomain;
       switch (bot) {
         case BOT_LE:
-          v -= 1;
-          // fall through
+          return NULL;
         case BOT_LQ:
         {
           Ranges::Bounded<FloatVal,FloatSetRanges> b = Ranges::Bounded<FloatVal,FloatSetRanges>::maxiter(dr,v);
@@ -367,8 +370,7 @@ namespace MiniZinc {
         }
           break;
         case BOT_GR:
-          v += 1;
-          // fall through
+          return NULL;
         case BOT_GQ:
         {
           Ranges::Bounded<FloatVal,FloatSetRanges> b = Ranges::Bounded<FloatVal,FloatSetRanges>::miniter(dr,v);

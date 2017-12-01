@@ -59,6 +59,8 @@ void Flattener::printHelp(ostream& os)
   << "  - --input-from-stdin\n    Read problem from standard input" << std::endl
   << "  -I --search-dir\n    Additionally search for included files in <dir>." << std::endl
   << "  -D \"fMIPdomains=false\"\n    No domain unification for MIP" << std::endl
+  << "  --MIPDMaxIntvEE <n>\n    Max integer domain subinterval length to enforce equality encoding, default " << opt_MIPDmaxIntvEE << std::endl
+  << "  --MIPDMaxDensEE <n>\n    Max domain cardinality to N subintervals ratio\n    to enforce equality encoding, default " << opt_MIPDmaxDensEE << ", either condition triggers" << std::endl
   << "  --only-range-domains\n    When no MIPdomains: all domains contiguous, holes replaced by inequalities" << std::endl
   << "  --allow-multiple-assignments\n    Allow multiple assignments to the same variable (e.g. in dzn)" << std::endl
   << std::endl;
@@ -146,6 +148,8 @@ bool Flattener::processOption(int& i, const int argc, const char** argv)
     flag_only_range_domains = true;
   } else if ( cop.getOption( "--no-MIPdomains" ) ) {   // internal
     flag_noMIPdomains = true;
+  } else if ( cop.getOption( "--MIPDMaxIntvEE", &opt_MIPDmaxIntvEE ) ) {
+  } else if ( cop.getOption( "--MIPDMaxDensEE", &opt_MIPDmaxDensEE ) ) {
   } else if ( cop.getOption( "-Werror" ) ) {
     flag_werror = true;
   } else if ( cop.getOption( "--allow-multiple-assignments" ) ) {
@@ -169,12 +173,7 @@ bool Flattener::processOption(int& i, const int argc, const char** argv)
         if ( fOutputByDefault )        // mzn2fzn mode
           goto error;
       }
-//       if (filenames.empty()) {
-        filenames.push_back(input_file);
-//       } else {
-//         std::cerr << "Error: Multiple .mzn or .fzn files given." << std::endl;
-//         goto error;
-//       }
+      filenames.push_back(input_file);
     } else if (extension == ".dzn" || extension == ".json") {
       datafiles.push_back(input_file);
     } else {
@@ -202,6 +201,7 @@ Flattener::~Flattener()
     if(is_flatzinc) {
       pEnv->swap();
     }
+  delete pEnv->model();
 }
 
 
@@ -303,8 +303,15 @@ void Flattener::flatten()
         std::vector<SyntaxError> se;
         m = parseFromString(input, "stdin", includePaths, flag_ignoreStdlib, false, flag_verbose, errstream, se);
       } else {
-        if (flag_verbose)
-          std::cerr << "Parsing '" << filenames[0] << "' ...";
+        if (flag_verbose) {
+          MZN_ASSERT_HARD_MSG( filenames.size(), "at least one model file needed" );
+          std::cerr << "Parsing file(s) '" << filenames[0] << '\'';
+          for ( int i=1; i<filenames.size(); ++i )
+            std::cerr << ", '" << filenames[i] << '\'';
+          for ( const auto& sFln: datafiles )
+            std::cerr << ", '" << sFln << '\'';
+          std::cerr << " ..." << std::endl;
+        }
         m = parse(env, filenames, datafiles, includePaths, flag_ignoreStdlib, false, flag_verbose, errstream);
       }
 
@@ -376,7 +383,7 @@ void Flattener::flatten()
               if ( ! flag_noMIPdomains ) {
                 if (flag_verbose)
                   std::cerr << "MIP domains ...";
-                MIPdomains(env, flag_statistics);
+                MIPdomains(env, flag_statistics, opt_MIPDmaxIntvEE, opt_MIPDmaxDensEE);
                 if (flag_verbose)
                   std::cerr << " done (" << stoptime(lasttime) << ")" << std::endl;
               }

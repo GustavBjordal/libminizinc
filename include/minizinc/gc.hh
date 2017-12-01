@@ -146,6 +146,8 @@ namespace MiniZinc {
     static void lock(void);
     /// Release garbage collector lock for this thread
     static void unlock(void);
+    /// Manually trigger garbage collector (must be unlocked)
+    static void trigger(void);
     /// Test if garbage collector is locked
     static bool locked(void);
     /// Add model \a m to root set
@@ -225,6 +227,7 @@ namespace MiniZinc {
     ~ASTNodeWeakMap(void);
     void insert(ASTNode* n0, ASTNode* n1);
     ASTNode* find(ASTNode* n);
+    void clear() { _m.clear(); }
   };
 }
 

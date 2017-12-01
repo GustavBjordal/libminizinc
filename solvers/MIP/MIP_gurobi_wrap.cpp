@@ -56,6 +56,8 @@ string MIP_WrapperFactory::getVersion( ) {
   return oss.str();
 }
 
+static const vector<string> sGurobiDLLs = { "gurobi75", "gurobi70", "gurobi65" };
+
 void MIP_WrapperFactory::printHelp(ostream& os) {
   os
   << "GUROBI MIP wrapper options:" << std::endl
@@ -73,11 +75,13 @@ void MIP_WrapperFactory::printHelp(ostream& os) {
   << "--writeParam <file> write GUROBI parameters to file" << std::endl
 //   << "--tuneParam         instruct GUROBI to tune parameters instead of solving   NOT IMPL"
 
-  << "--absGap <n>        absolute gap |primal-dual| to stop" << std::endl
+  << "\n--absGap <n>        absolute gap |primal-dual| to stop" << std::endl
   << "--relGap <n>        relative gap |primal-dual|/<solver-dep> to stop. Default 1e-8, set <0 to use backend's default" << std::endl
   << "--intTol <n>        integrality tolerance for a variable. Default 1e-6" << std::endl
 //   << "--objDiff <n>       objective function discretization. Default 1.0" << std::endl
 
+  << "\n--dll <basename>    Gurobi DLL base name, such as gurobi75, when using plugin. Default range tried: "
+       << sGurobiDLLs.front() << " .. " << sGurobiDLLs.back() << std::endl
   << std::endl;
 }
 
@@ -99,6 +103,8 @@ void MIP_WrapperFactory::printHelp(ostream& os) {
  static   double intTol=1e-6;
  static   double objDiff=1.0;
 
+ static   string sGurobiDLL;
+
 bool MIP_WrapperFactory::processOption(int& i, int argc, const char** argv) {
   MiniZinc::CLOParser cop( i, argc, argv );
   if ( string(argv[i])=="-a"
@@ -116,6 +122,7 @@ bool MIP_WrapperFactory::processOption(int& i, int argc, const char** argv) {
   } else if ( cop.get( "--absGap", &absGap ) ) {
   } else if ( cop.get( "--relGap", &relGap ) ) {
   } else if ( cop.get( "--intTol", &intTol ) ) {
+  } else if ( cop.get( "--dll", &sGurobiDLL ) ) {
 //   } else if ( cop.get( "--objDiff", &objDiff ) ) {
   } else
     return false;
@@ -171,18 +178,24 @@ namespace {
 void MIP_gurobi_wrapper::checkDLL()
 {
 #ifdef HAS_GUROBI_PLUGIN
-  
-  gurobi_dll = dll_open("gurobi70");
-  if (gurobi_dll==NULL) {
-    gurobi_dll = dll_open("gurobi65");
+ 
+  if ( sGurobiDLL.size() ) { 
+    gurobi_dll = dll_open( sGurobiDLL.c_str() );
+  } else {
+    for( const auto& s: sGurobiDLLs ) {
+      gurobi_dll = dll_open( s.c_str() );
+      if ( NULL!=gurobi_dll )
+        break;
+    }
   }
 
   if (gurobi_dll==NULL) {
-    throw MiniZinc::InternalError("cannot load gurobi dll");
+    throw MiniZinc::InternalError("cannot load gurobi dll, specify --dll");
   }
   
   *(void**)(&dll_GRBversion) = dll_sym(gurobi_dll, "GRBversion");
   *(void**)(&dll_GRBaddconstr) = dll_sym(gurobi_dll, "GRBaddconstr");
+  *(void**)(&dll_GRBaddgenconstrIndicator) = dll_sym(gurobi_dll, "GRBaddgenconstrIndicator");
   *(void**)(&dll_GRBaddvars) = dll_sym(gurobi_dll, "GRBaddvars");
   *(void**)(&dll_GRBcbcut) = dll_sym(gurobi_dll, "GRBcbcut");
   *(void**)(&dll_GRBcbget) = dll_sym(gurobi_dll, "GRBcbget");
@@ -202,6 +215,7 @@ void MIP_gurobi_wrapper::checkDLL()
   *(void**)(&dll_GRBsetdblparam) = dll_sym(gurobi_dll, "GRBsetdblparam");
   *(void**)(&dll_GRBsetintattr) = dll_sym(gurobi_dll, "GRBsetintattr");
   *(void**)(&dll_GRBsetintattrlist) = dll_sym(gurobi_dll, "GRBsetintattrlist");
+  *(void**)(&dll_GRBsetdblattrelement) = dll_sym(gurobi_dll, "GRBsetdblattrelement");
   *(void**)(&dll_GRBsetintparam) = dll_sym(gurobi_dll, "GRBsetintparam");
   *(void**)(&dll_GRBsetstrparam) = dll_sym(gurobi_dll, "GRBsetstrparam");
   *(void**)(&dll_GRBupdatemodel) = dll_sym(gurobi_dll, "GRBupdatemodel");
@@ -212,6 +226,7 @@ void MIP_gurobi_wrapper::checkDLL()
 
   dll_GRBversion = GRBversion;
   dll_GRBaddconstr = GRBaddconstr;
+  dll_GRBaddgenconstrIndicator = GRBaddgenconstrIndicator;
   dll_GRBaddvars = GRBaddvars;
   dll_GRBcbcut = GRBcbcut;
   dll_GRBcbget = GRBcbget;
@@ -231,6 +246,7 @@ void MIP_gurobi_wrapper::checkDLL()
   dll_GRBsetdblparam = GRBsetdblparam;
   dll_GRBsetintattr = GRBsetintattr;
   dll_GRBsetintattrlist = GRBsetintattrlist;
+  dll_GRBsetdblattrelement = GRBsetdblattrelement;
   dll_GRBsetintparam = GRBsetintparam;
   dll_GRBsetstrparam = GRBsetstrparam;
   dll_GRBupdatemodel = GRBupdatemodel;
@@ -264,6 +280,9 @@ void MIP_gurobi_wrapper::closeGUROBI()
      /* Free up the problem as allocated by GRB_createprob, if necessary */
   /* Free model */
 
+  // If not allocated, skip
+  if (0==model)
+    return;
   dll_GRBfreemodel(model);
   model = 0;
 
@@ -323,7 +342,7 @@ void MIP_gurobi_wrapper::addRow
   (int nnz, int* rmatind, double* rmatval, MIP_wrapper::LinConType sense,
    double rhs, int mask, string rowName)
 {
-  //// Make sure:
+  //// Make sure in order to notice the indices of lazy constr:
   ++ nRows;
   /// Convert var types:
   char ssense=getGRBSense(sense);
@@ -350,6 +369,40 @@ void MIP_gurobi_wrapper::addRow
     nLazyValue.push_back( nLazyAttr );
   }
 }
+
+void MIP_gurobi_wrapper::addIndicatorConstraint(
+    int iBVar, int bVal, int nnz, int* rmatind, double* rmatval,
+    MIP_wrapper::LinConType sense, double rhs, string rowName) {
+  wrap_assert( 0<=bVal && 1>=bVal, "Gurobi: addIndicatorConstraint: bVal not 0/1" );
+  //// Make sure in order to notice the indices of lazy constr: also here?   TODO
+  ++ nRows;
+  char ssense=getGRBSense(sense);
+  error = dll_GRBaddgenconstrIndicator(model, rowName.c_str(), iBVar, bVal,
+                                   nnz, rmatind, rmatval, ssense, rhs);    
+  wrap_assert( !error,  "Failed to add indicator constraint." );
+}
+
+void MIP_gurobi_wrapper::setVarBounds(int iVar, double lb, double ub)
+{
+  wrap_assert( lb<=ub, "mzn-gurobi: setVarBounds: lb>ub" );
+  error = dll_GRBsetdblattrelement( model, GRB_DBL_ATTR_LB, iVar, lb);
+  wrap_assert( !error,  "mzn-gurobi: failed to set var lb." );
+  error = dll_GRBsetdblattrelement( model, GRB_DBL_ATTR_UB, iVar, ub);
+  wrap_assert( !error,  "mzn-gurobi: failed to set var ub." );
+}
+
+void MIP_gurobi_wrapper::setVarLB(int iVar, double lb)
+{
+  error = dll_GRBsetdblattrelement( model, GRB_DBL_ATTR_LB, iVar, lb);
+  wrap_assert( !error,  "mzn-gurobi: failed to set var lb." );
+}
+
+void MIP_gurobi_wrapper::setVarUB(int iVar, double ub)
+{
+  error = dll_GRBsetdblattrelement( model, GRB_DBL_ATTR_UB, iVar, ub);
+  wrap_assert( !error,  "mzn-gurobi: failed to set var ub." );
+}
+
 
 /// SolutionCallback ------------------------------------------------------------------------
 /// Gurobi ensures thread-safety

@@ -14,8 +14,8 @@ function set of int: reverse_map(array[int] of bool: b) ::promise_total =
 array[int] of var bool: set2bools(var set of int: x) ::promise_total =
   if is_fixed(x) then set2bools(fix(x)) else
   let {
-    array[min(ub(x))..max(ub(x))] of var bool: b =
-      [ set2bools_bit( x, i ) | i in min(ub(x))..max(ub(x)) ];
+    array[int] of var bool: b = array1d( min(ub(x))..max(ub(x)),
+      [ set2bools_bit( x, i ) | i in min(ub(x))..max(ub(x)) ] );
     constraint (x = reverse_map(b)) :: is_reverse_map;
   } in b
   endif;
@@ -23,9 +23,9 @@ array[int] of var bool: set2bools(var set of int: x, set of int: ubx) ::promise_
   if is_fixed(x) then set2bools(fix(x), ubx) else
   let {
     array[int] of var bool: b0 = set2bools( x );       %% Call in any case ?? TODO
-    array[min(ubx)..max(ubx)] of var bool: b =
+    array[int] of var bool: b = array1d( min(ubx)..max(ubx),
       [ if i in ubx then set2bools_bit( x, i ) else false endif
-        | i in min(ubx)..max(ubx) ];
+        | i in min(ubx)..max(ubx) ] );
 %% Not again:    constraint (x = reverse_map(b)) :: is_reverse_map;
   } in b
   endif;
@@ -176,6 +176,11 @@ predicate set_subset_reif(var set of int: x, var set of int: y, var bool: b) =
     else bx[i] -> by[i] endif
   );
 
+%%% Map the subset operation to superset
+predicate set_superset(var set of int: x, var set of int: y) = set_subset( y, x );
+predicate set_superset_reif(var set of int: x, var set of int: y, var bool: b) =
+    set_subset_reif( y, x, b );
+
 function var set of int: set_intersect(var set of int: x, var set of int: y) ::promise_total =
   let {
     array[int] of var bool: bx = set2bools(x);
@@ -232,7 +237,7 @@ function var int: card(var set of int: x) ::promise_total =
   let {
     array[int] of var bool: bx = set2bools(x);
     var 0..length(bx) : c;
-    constraint bool_lin_eq([1 | i in index_set(bx)],bx,c);
+    constraint bool_lin_eq([1 | i in index_set(bx)],[bx[i] | i in index_set(bx)],c);
   } in c;
 
 predicate set_in(var int: x, var set of int: y) =
@@ -251,5 +256,62 @@ function array[int] of var bool: setarray2bools(array[int] of var set of int: x)
   endif;
 %% Par version no sense
   
+
+predicate array_var_set_element(var int: x, array[int] of var set of int: y, var set of int: z) =
+  let {
+    constraint x in index_set( y );
+    set of int: sUB = array_union( [ ub(y[i]) | i in dom(x) ] );
+    set of int: sLB = array_intersect( [ lb(y[i]) | i in dom(x) ] );
+  } in
+  forall (k in ub(z)) (
+    set2bools(z)[k] == 
+      if k in sUB then
+        if k in sLB then
+          true
+        else
+          array1d( lb(x)..ub(x),
+            [ if k in ub(y[i]) then set2bools(y[i])[k] else false endif | i in dom(x) ] )[x]
+        endif
+      else
+        false
+      endif
+  ) /\
+  forall (k in sUB diff ub(z))(
+    if k in sLB then
+      false                     %% fail the constraint
+    else
+      not array1d( lb(x)..ub(x),
+        [ if k in ub(y[i]) then set2bools(y[i])[k] else false endif | i in dom(x) ] )[x]
+    endif
+  );
+
+predicate array_set_element(var int: x, array[int] of set of int: y, var set of int: z) =
+  let {
+    constraint x in index_set( y );
+    set of int: sUB = array_union( [ y[i] | i in dom(x) ] );
+    set of int: sLB = array_intersect( [ y[i] | i in dom(x) ] );
+  } in
+  forall (k in ub(z)) (
+    set2bools(z)[k] == 
+      if k in sUB then
+        if k in sLB then
+          true
+        else
+          array1d( lb(x)..ub(x),
+            [ if k in ub(y[i]) then set2bools(y[i])[k] else false endif | i in dom(x) ] )[x]
+        endif
+      else
+        false
+      endif
+  ) /\
+  forall (k in sUB diff ub(z))(
+    if k in sLB then
+      false                     %% fail the constraint
+    else
+      not array1d( lb(x)..ub(x),
+        [ if k in ub(y[i]) then set2bools(y[i])[k] else false endif | i in dom(x) ] )[x]
+    endif
+  );
+
 annotation set_search(array[int] of var set of int: x, ann: a1, ann: a2, ann: a3) =
   bool_search(setarray2bools(x),a1,a2,a3);

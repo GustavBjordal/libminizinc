@@ -214,7 +214,7 @@ namespace MiniZinc {
       VarDecl* vd_rename = new VarDecl(Location().introduce(), vd_rename_ti, vd->flat()->id()->idn(), NULL);
       vd_rename->flat(vd->flat());
       makePar(e,vd_rename);
-      vd->e(vd_rename->id());
+      vd->setRHS(vd_rename->id());
       e.output->addItem(new VarDeclI(Location().introduce(), vd_rename));
     }
   }
@@ -260,8 +260,8 @@ namespace MiniZinc {
           case Expression::E_COMP:
           {
             Comprehension* comp = e->template cast<Comprehension>();
-            stack.push_back(comp->where());
             for (unsigned int i=comp->n_generators(); i--; ) {
+              stack.push_back(comp->where(i));
               stack.push_back(comp->in(i));
               for (unsigned int j=comp->n_decls(i); j--; ) {
                 stack.push_back(comp->decl(i, j));
@@ -323,22 +323,22 @@ namespace MiniZinc {
         VarDecl* reallyFlat = vd->flat();
         while (reallyFlat != NULL && reallyFlat != reallyFlat->flat())
           reallyFlat = reallyFlat->flat();
-        IdMap<int>::iterator idx = reallyFlat ? env.output_vo.idx.find(reallyFlat->id()) : env.output_vo.idx.end();
+        IdMap<int>::iterator idx = reallyFlat ? env.output_vo_flat.idx.find(reallyFlat->id()) : env.output_vo_flat.idx.end();
         IdMap<int>::iterator idx2 = env.output_vo.idx.find(vd->id());
-        if (idx==env.output_vo.idx.end() && idx2==env.output_vo.idx.end()) {
+        if (idx==env.output_vo_flat.idx.end() && idx2==env.output_vo.idx.end()) {
           VarDeclI* nvi = new VarDeclI(Location().introduce(), copy(env,env.cmap,vd)->cast<VarDecl>());
           Type t = nvi->e()->ti()->type();
           if (t.ti() != Type::TI_PAR) {
             t.ti(Type::TI_PAR);
           }
           makePar(env,nvi->e());
-          nvi->e()->ti()->domain(NULL);
+          nvi->e()->ti()->setDomain(NULL);
           nvi->e()->flat(vd->flat());
           ClearAnnotations::run(nvi->e());
           nvi->e()->introduced(false);
           if (reallyFlat)
-            env.output_vo.add(reallyFlat, env.output->size());
-          env.output_vo.add(nvi, env.output->size());
+            env.output_vo_flat.add_idx(reallyFlat, env.output->size());
+          env.output_vo.add_idx(nvi, env.output->size());
           env.output_vo.add(nvi->e(), ci);
           env.output->addItem(nvi);
           
@@ -374,10 +374,10 @@ namespace MiniZinc {
               rhs->decl(decl);
             }
             outputVarDecls(env,nvi,it->second());
-            nvi->e()->e(rhs);
+            nvi->e()->setRHS(rhs);
           } else if (reallyFlat && cannotUseRHSForOutput(env, reallyFlat->e())) {
             assert(nvi->e()->flat());
-            nvi->e()->e(NULL);
+            nvi->e()->setRHS(NULL);
             if (nvi->e()->type().dim() == 0) {
               reallyFlat->addAnnotation(constants().ann.output_var);
             } else {
@@ -456,9 +456,17 @@ namespace MiniZinc {
   
   void createDznOutput(EnvI& e, bool outputObjective) {
     std::vector<Expression*> outputVars;
-    bool had_add_to_output = false;
-    for (unsigned int i=0; i<e.orig->size(); i++) {
-      if (VarDeclI* vdi = (*e.orig)[i]->dyn_cast<VarDeclI>()) {
+    
+    class DZNOVisitor : public ItemVisitor {
+    protected:
+      EnvI& e;
+      bool outputObjective;
+      std::vector<Expression*>& outputVars;
+      bool had_add_to_output;
+    public:
+      DZNOVisitor(EnvI& e0, bool outputObjective0, std::vector<Expression*>& outputVars0)
+      : e(e0), outputObjective(outputObjective0), outputVars(outputVars0), had_add_to_output(false) {}
+      void vVarDeclI(VarDeclI* vdi) {
         VarDecl* vd = vdi->e();
         bool process_var = false;
         if (outputObjective && vd->id()->idn()==-1 && vd->id()->v()=="_objective") {
@@ -527,21 +535,32 @@ namespace MiniZinc {
           outputVars.push_back(eol);
         }
       }
-    }
+      void vOutputI(OutputI* oi) {
+        oi->remove();
+      }
+    } dznov(e, outputObjective, outputVars);
+
+    iterItems(dznov, e.orig);
+    
     OutputI* newOutputItem = new OutputI(Location().introduce(),new ArrayLit(Location().introduce(),outputVars));
-    if (e.orig->outputItem()) {
-      e.orig->outputItem()->remove();
-    }
     e.orig->addItem(newOutputItem);
   }
 
   void createJSONOutput(EnvI& e, bool outputObjective) {
     std::vector<Expression*> outputVars;
     outputVars.push_back(new StringLit(Location().introduce(), "{\n"));
-    bool had_add_to_output = false;
-    bool first_var = true;
-    for (unsigned int i=0; i<e.orig->size(); i++) {
-      if (VarDeclI* vdi = (*e.orig)[i]->dyn_cast<VarDeclI>()) {
+
+    class JSONOVisitor : public ItemVisitor {
+    protected:
+      EnvI& e;
+      bool outputObjective;
+      std::vector<Expression*>& outputVars;
+      bool had_add_to_output;
+      bool first_var;
+    public:
+      JSONOVisitor(EnvI& e0, bool outputObjective0, std::vector<Expression*>& outputVars0)
+      : e(e0), outputObjective(outputObjective0), outputVars(outputVars0), had_add_to_output(false), first_var(true) {}
+      void vVarDeclI(VarDeclI* vdi) {
         VarDecl* vd = vdi->e();
         bool process_var = false;
         if (outputObjective && vd->id()->idn()==-1 && vd->id()->v()=="_objective") {
@@ -580,18 +599,18 @@ namespace MiniZinc {
           assert(fi);
           show->decl(fi);
           outputVars.push_back(show);
-          if (vd->type().dim() > 0) {
-            StringLit* eol = new StringLit(Location().introduce(),")");
-            outputVars.push_back(eol);
-          }
         }
       }
-    }
+      void vOutputI(OutputI* oi) {
+        oi->remove();
+      }
+    } jsonov(e, outputObjective, outputVars);
+    
+    iterItems(jsonov, e.orig);
+
     outputVars.push_back(new StringLit(Location().introduce(), "\n}\n"));
+    
     OutputI* newOutputItem = new OutputI(Location().introduce(),new ArrayLit(Location().introduce(),outputVars));
-    if (e.orig->outputItem()) {
-      e.orig->outputItem()->remove();
-    }
     e.orig->addItem(newOutputItem);
   }
   
@@ -685,7 +704,7 @@ namespace MiniZinc {
           
           Type t = vdi_copy->e()->ti()->type();
           t.ti(Type::TI_PAR);
-          vdi_copy->e()->ti()->domain(NULL);
+          vdi_copy->e()->ti()->setDomain(NULL);
           vdi_copy->e()->flat(vdi->e()->flat());
           vdi_copy->e()->ann().clear();
           vdi_copy->e()->introduced(false);
@@ -696,7 +715,7 @@ namespace MiniZinc {
               // side that is par, so we can use that.
               Expression* flate = eval_par(env, vdi->e()->e());
               outputVarDecls(env,vdi_copy,flate);
-              vd->e(flate);
+              vd->setRHS(flate);
             } else {
               vd = follow_id_to_decl(vd->id())->cast<VarDecl>();
               VarDecl* reallyFlat = vd->flat();
@@ -707,7 +726,7 @@ namespace MiniZinc {
                 // We can use the right hand side of the flat version of this variable
                 Expression* flate = copy(env,env.cmap,follow_id(reallyFlat->id()));
                 outputVarDecls(env,vdi_copy,flate);
-                vd->e(flate);
+                vd->setRHS(flate);
               } else if ( (it = env.reverseMappers.find(vd->id())) != env.reverseMappers.end()) {
                 // Found a reverse mapper, so we need to add the mapping function to the
                 // output model to map the FlatZinc value back to the model variable.
@@ -740,11 +759,11 @@ namespace MiniZinc {
                   rhs->decl(decl);
                 }
                 outputVarDecls(env,vdi_copy,rhs);
-                vd->e(rhs);
+                vd->setRHS(rhs);
               } else if (cannotUseRHSForOutput(env,vd->e())) {
                 // If the VarDecl does not have a usable right hand side, it needs to be
                 // marked as output in the FlatZinc
-                vd->e(NULL);
+                vd->setRHS(NULL);
                 assert(vd->flat());
                 if (vd->type().dim() == 0) {
                   vd->flat()->addAnnotation(constants().ann.output_var);
@@ -763,7 +782,7 @@ namespace MiniZinc {
                     }
                     if (!needOutputAnn) {
                       outputVarDecls(env, vdi_copy, al);
-                      vd->e(copy(env,env.cmap,al));
+                      vd->setRHS(copy(env,env.cmap,al));
                     }
                   }
                   if (needOutputAnn) {
@@ -783,12 +802,12 @@ namespace MiniZinc {
                   }
                 }
               }
-              if (env.output_vo.find(reallyFlat) == -1)
-                env.output_vo.add(reallyFlat, env.output->size());
+              if (env.output_vo_flat.find(reallyFlat) == -1)
+                env.output_vo_flat.add_idx(reallyFlat, env.output->size());
             }
           }
           makePar(env,vdi_copy->e());
-          env.output_vo.add(vdi_copy, env.output->size());
+          env.output_vo.add_idx(vdi_copy, env.output->size());
           CollectOccurrencesE ce(env.output_vo,vdi_copy);
           topDown(ce, vdi_copy->e());
           env.output->addItem(vdi_copy);
@@ -830,7 +849,7 @@ namespace MiniZinc {
                 removeIsOutput(reallyFlat);
                 Expression* flate = copy(e,e.cmap,follow_id(reallyFlat->id()));
                 outputVarDecls(e,item,flate);
-                vd->e(flate);
+                vd->setRHS(flate);
               } else if ( (it = e.reverseMappers.find(vd->id())) != e.reverseMappers.end()) {
                 Call* rhs = copy(e,e.cmap,it->second())->cast<Call>();
                 std::vector<Type> tv(rhs->args().size());
@@ -865,7 +884,7 @@ namespace MiniZinc {
                 }
                 
                 outputVarDecls(e,item,it->second()->cast<Call>());
-                vd->e(rhs);
+                vd->setRHS(rhs);
               } else {
                 // If the VarDecl does not have a usable right hand side, it needs to be
                 // marked as output in the FlatZinc
@@ -890,7 +909,7 @@ namespace MiniZinc {
                     }
                     
                     outputVarDecls(e, item, al);
-                    vd->e(copy(e,e.cmap,al));
+                    vd->setRHS(copy(e,e.cmap,al));
                   }
                 }
                 if (needOutputAnn) {
@@ -918,7 +937,7 @@ namespace MiniZinc {
               }
               vd->flat(NULL);
             }
-            e.output_vo.add(item->cast<VarDeclI>(), i);
+            e.output_vo.add_idx(item->cast<VarDeclI>(), i);
             CollectOccurrencesE ce(e.output_vo,item);
             topDown(ce, vd);
           }
