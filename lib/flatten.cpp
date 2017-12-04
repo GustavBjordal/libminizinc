@@ -172,7 +172,7 @@ namespace MiniZinc {
 
 #define MZN_FILL_REIFY_MAP(T,ID) reifyMap.insert(std::pair<ASTString,ASTString>(constants().ids.T.ID,constants().ids.T ## reif.ID));
 
-  EnvI::EnvI(Model* orig0) : orig(orig0), output(new Model), ignorePartial(false), maxCallStack(0), collect_vardecls(false), in_redundant_constraint(0), in_maybe_partial(0), _flat(new Model), _failed(false), ids(0) {
+  EnvI::EnvI(Model* orig0) : orig(orig0), output(new Model), ignorePartial(false), maxCallStack(0), collect_vardecls(false), in_redundant_constraint(0), in_maybe_partial(0), _flat(new Model), _failed(false), ids(0), flatFunctionMode(false) {
     MZN_FILL_REIFY_MAP(int_,lin_eq);
     MZN_FILL_REIFY_MAP(int_,lin_le);
     MZN_FILL_REIFY_MAP(int_,lin_ne);
@@ -238,6 +238,9 @@ namespace MiniZinc {
   }
   void EnvI::pop_expr_map(){
     exprMap.pop_back();
+  }
+  void EnvI::setFlatFunctionMode(bool b){
+   flatFunctionMode = b
   }
   bool is_a_lit(Expression* e){
     return e->isa<ArrayLit>()||
@@ -364,8 +367,12 @@ namespace MiniZinc {
   }
   
   void EnvI::flat_changeDomain(VarDecl* vd, Expression* newDomain, bool computedDomain) {
-    vd->ti()->setDomain(newDomain);
-    vd->ti()->setComputedDomain(computedDomain);
+    if(flatFunctionMode){
+      
+    }else{
+      vd->ti()->setDomain(newDomain);
+      vd->ti()->setComputedDomain(computedDomain);
+    }
   }
   
   void EnvI::flat_removeItem(MiniZinc::Item* i) {
@@ -3154,9 +3161,6 @@ namespace MiniZinc {
       }
       return ret;
     }
-    Printer p(std::cerr, 120);
-    std::cerr << "Flat_exp on " << e->eid() << " ";
-    p.print(e);
     switch (e->eid()) {
     case Expression::E_INTLIT:
     case Expression::E_FLOATLIT:
@@ -4534,8 +4538,6 @@ namespace MiniZinc {
             }
             if (le1) {
               if (boe0->type().isint()) {
-                p.print(le0);
-                p.print(le1);
                 flatten_linexp_binop<IntLit>(env,ctx,r,b,ret,le0,le1,bot,doubleNeg,ees,args,callid);
               } else {
                 flatten_linexp_binop<FloatLit>(env,ctx,r,b,ret,le0,le1,bot,doubleNeg,ees,args,callid);
@@ -6749,11 +6751,13 @@ namespace MiniZinc {
     
     Ctx c = ctx;
     c.b = BCtx::C_POS;
-    EE result = flat_exp(env, c, call, NULL, constants().var_true);
+    EE result = flat_exp(env, Ctx(), call, NULL, NULL);
     
-    /*Printer p(std::cerr, 300);
+    Printer p(std::cerr, 300);
     std::cerr << "---------------create_flat_function_from_call " << std::endl;
     p.print(env.flat());
+    std::cerr << "-------------create_flat_function_from_call done" << std::endl;
+    /*
     std::cerr << "-------------optimize" << std::endl;
     
     optimize(e);
@@ -6789,6 +6793,7 @@ namespace MiniZinc {
     Printer p(std::cerr, 120);
     {
       GCLock lock;
+      env.setFlatFunctionMode(true);
       std::vector<EE>* calls = env.flatCall();
       for (int callNumber = 0; callNumber < calls->size(); callNumber++) {
         EE c = calls->at(callNumber);
@@ -6824,7 +6829,6 @@ namespace MiniZinc {
         std::cerr << "---------------Printing modelwhile creating function - " << callNumber << std::endl;
         p.print(env.flat());
         std::cerr << "-------------Printing model while creating functions done" << std::endl;
-        
         
       }
       //Remove new flatzinc stuff

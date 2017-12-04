@@ -89,11 +89,13 @@ namespace MiniZinc {
     int in_redundant_constraint;
     int in_maybe_partial;
   protected:
-    //Map map;
+    Map map;
     std::vector<Map> varsMap;
     std::vector<Map> exprMap;
     std::vector<EE> flatzincCalls;
     Model* _flat;
+    
+    bool flatFunctionMode;
   public:
 
     void flat(Model *_flat);
@@ -118,6 +120,7 @@ namespace MiniZinc {
     void pop_vars_map();
     void push_expr_map();
     void pop_expr_map();
+    void setFlatFunctionMode(bool b);
     void map_insert(Expression* e, const EE& ee);
     Map::iterator map_find(Expression* e);
     void map_remove(Expression* e);

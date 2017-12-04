@@ -340,7 +340,7 @@ namespace MiniZinc {
           _iteratorVars.push_back(newVar);
         }
       }
-      _where = c.where();
+      _where = c.where(0);
       CallFinder *ensureFinder = new CallFinder();
       ensureFinder->find(LSConstants::ENSURE, c.e());
       assert((ensureFinder->getFoundCalls().size() <= 1) && "Found multiple ensures in a neighbourhood.");
