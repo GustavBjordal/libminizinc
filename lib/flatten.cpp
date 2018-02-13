@@ -6757,21 +6757,7 @@ namespace MiniZinc {
     Ctx c = ctx;
     c.b = BCtx::C_POS;
     EE result = flat_exp(env, Ctx(), call, NULL, NULL);
-    
-    /*
-    Printer p(std::cerr, 300);
-    std::cerr << "---------------create_flat_function_from_call " << std::endl;
-    p.print(env.flat());
-    std::cerr << "-------------create_flat_function_from_call done" << std::endl;
-    */
-     /*
-    std::cerr << "-------------optimize" << std::endl;
-    
-    optimize(e);
-    p.print(env.flat());
-    std::cerr << "-------------optimize done" << std::endl;
-    */
-    
+        
     int newSize = env.flat()->size();
     std::vector<Expression*> letBody;
     for (int i = originalSize; i < env.flat()->size(); i++) {
@@ -6812,7 +6798,6 @@ namespace MiniZinc {
         ASTExprVec<VarDecl> params =  targetCallDecl->params();
         std::cerr << "Creating Flat function for: " << *targetCall << std::endl;
         std::cerr << "Old function declaration:" << std::endl;
-        //p.print(targetCallDecl);
         
         FunctionI* tmpFunction = new FunctionI(targetCallDecl->loc(),
                                                      "FUN_INTRODUCED_" + std::to_string(callNumber) + "_" +
@@ -6834,10 +6819,6 @@ namespace MiniZinc {
         targetCall->args(NULL);
         std::cerr << std::endl;
         
-        /*std::cerr << "---------------Printing modelwhile creating function - " << callNumber << std::endl;
-        p.print(env.flat());
-        std::cerr << "-------------Printing model while creating functions done" << std::endl;
-        */
       }
       //Remove new flatzinc stuff
       for (int i = originalSize; i < env.flat()->size(); i++) {

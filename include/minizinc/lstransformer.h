@@ -360,30 +360,6 @@ namespace MiniZinc {
         }
       }
       
-      /*std::vector<Expression*> whereParts;
-      
-      for (int i=0; i<c.n_generators(); i++) {
-        if(c.where(i)){
-          whereParts.push_back(c.where(i));
-        }
-      }
-      std::vector<Expression*> forall_args(1);
-      forall_args[0] = new ArrayLit(c.loc(),whereParts);
-      
-      Call* forall_where = new Call(c.loc(), constants().ids.forall, forall_args);
-      forall_where->type(Type::varbool());
-      forall_where->decl(env.orig->matchFn(env, forall_where, false));
-      std::cerr << "does this fix things?" << std::endl;
-      std::cerr << *forall_where << std::endl;
-       */
-      
-      // Just keep a list of all where and add them further down.
-      // Just remember to add the annotation
-      
-      
-      //_where = forall_where; //c.where(0);
-      
-      
       CallFinder *ensureFinder = new CallFinder();
       ensureFinder->find(LSConstants::ENSURE, c.e());
       assert((ensureFinder->getFoundCalls().size() <= 1) && "Found multiple ensures in a neighbourhood.");
@@ -434,12 +410,6 @@ namespace MiniZinc {
         (*itr)->addAnnotation(constants().ann.ls_pre_condition);
         whereList.push_back((*itr));
       }
-      /*
-      if (_where) {
-        _where->addAnnotation(constants().ann.ls_pre_condition);
-        whereList.push_back(_where);
-      }
-       */
 
       //Construct nested lets
 
@@ -464,10 +434,6 @@ namespace MiniZinc {
 
       Type vBool = Type::ann();
       
-      /*FunctionI *ensureFunction = env.create_function(vBool, neighbourhoodName + "_ENSURE", ensureFuncParam, ensureLet);
-      ensureFunction->ann().add(constants().ann.flat_function);
-      Call *ensureCall = new Call(_origC->loc(), ensureFunction->id().str(), callEnsureArgs, ensureFunction);
-      */
 
       Call *ensureCall = LSTransformation::createFlatFunctionAndCall(env,
                                                                      vBool,
@@ -543,12 +509,6 @@ namespace MiniZinc {
 
           Expression *fromBody = &(_g.getLetExpression(fi, fi->id().str() + "_FROM_" + std::to_string(i)));
 
-
-          /*FunctionI *fromFunction = env.create_function(vAnn, fi->id().str() + "_FROM_" + std::to_string(i),
-                                                        fromFuncParam, fromBody);
-          fromFunction->ann().add(constants().ann.flat_function);
-          Call *fromCall = new Call(fi->loc(), fromFunction->id().str(), callFromArgs, fromFunction);
-          */
           Call *fromCall = LSTransformation::createFlatFunctionAndCall(env,
                                                                        vAnn,
                                                                        fi->loc(),
