@@ -368,7 +368,12 @@ namespace MiniZinc {
   
   void EnvI::flat_changeDomain(VarDecl* vd, Expression* newDomain, bool computedDomain) {
     if(flatFunctionMode){
-      
+      std::vector<Expression*> domConArgs(2);
+      domConArgs[0] = vd->id();
+      domConArgs[1] = newDomain;
+      Call* domConstraint = new Call(Location().introduce(), constants().ids.set_in, domConArgs);
+      ConstraintI* domConI = new ConstraintI(Location().introduce(), domConstraint);
+      flat_addItem(domConI);
     }else{
       vd->ti()->setDomain(newDomain);
       vd->ti()->setComputedDomain(computedDomain);
@@ -6753,11 +6758,13 @@ namespace MiniZinc {
     c.b = BCtx::C_POS;
     EE result = flat_exp(env, Ctx(), call, NULL, NULL);
     
+    /*
     Printer p(std::cerr, 300);
     std::cerr << "---------------create_flat_function_from_call " << std::endl;
     p.print(env.flat());
     std::cerr << "-------------create_flat_function_from_call done" << std::endl;
-    /*
+    */
+     /*
     std::cerr << "-------------optimize" << std::endl;
     
     optimize(e);
@@ -6805,7 +6812,8 @@ namespace MiniZinc {
         ASTExprVec<VarDecl> params =  targetCallDecl->params();
         std::cerr << "Creating Flat function for: " << *targetCall << std::endl;
         std::cerr << "Old function declaration:" << std::endl;
-        p.print(targetCallDecl);
+        //p.print(targetCallDecl);
+        
         FunctionI* tmpFunction = new FunctionI(targetCallDecl->loc(),
                                                      "FUN_INTRODUCED_" + std::to_string(callNumber) + "_" +
                                                        targetCallDecl->id().str(),
@@ -6826,10 +6834,10 @@ namespace MiniZinc {
         targetCall->args(NULL);
         std::cerr << std::endl;
         
-        std::cerr << "---------------Printing modelwhile creating function - " << callNumber << std::endl;
+        /*std::cerr << "---------------Printing modelwhile creating function - " << callNumber << std::endl;
         p.print(env.flat());
         std::cerr << "-------------Printing model while creating functions done" << std::endl;
-        
+        */
       }
       //Remove new flatzinc stuff
       for (int i = originalSize; i < env.flat()->size(); i++) {

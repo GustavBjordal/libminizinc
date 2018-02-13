@@ -463,7 +463,7 @@ void Flattener::flatten()
             if (flag_output_fzn_stdout) {
               if (flag_verbose)
                 std::cerr << "Printing FlatZinc to stdout ..." << std::endl;
-              Printer p(std::cout,0);
+              Printer p(std::cout,500);
               p.print(env.flat());
               if (flag_verbose)
                 std::cerr << " done (" << stoptime(lasttime) << ")" << std::endl;
