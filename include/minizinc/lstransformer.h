@@ -198,18 +198,19 @@ namespace MiniZinc {
     }
 
     Expression *get1dIndex(const Call &c, const ArrayAccess *access, ASTExprVec <Expression> &idxs) const {
+      std::__1::vector<Expression *> idxArgs;
+      idxArgs.push_back(access->v());
       Expression *plusExpr = IntLit::a(IntVal(1));
       for (int i = 0; i < idxs.size() - 1; ++i) {
-        std::__1::vector<Expression *> idxArgs;
-        idxArgs.push_back(access->v());
+
         std::__1::vector<Expression *> minArgs;
         minArgs.push_back(new Call(c.loc(),
                                    "index_set_" + std::__1::to_string(i + 1) + "of" +
                                    std::__1::to_string(idxs.size()), idxArgs));
         BinOp *multExpr = new BinOp(c.loc(), idxs[i], BOT_MINUS,
                                     new Call(c.loc(), "min", minArgs));
-
-        for (int j = i; j < idxs.size() - 1; ++j) {
+        
+        for (int j = i+1; j < idxs.size(); ++j) {
           std::__1::vector<Expression *> cardArgs;
           cardArgs.push_back(new Call(c.loc(),
                                       "index_set_" + std::__1::to_string(j + 1) + "of" +
@@ -219,7 +220,17 @@ namespace MiniZinc {
         }
         plusExpr = new BinOp(c.loc(), plusExpr, BOT_PLUS, multExpr);
       }
-      plusExpr = new BinOp(c.loc(), plusExpr, BOT_PLUS, idxs[idxs.size() - 1]);
+      std::__1::vector<Expression *> minArgs;
+      minArgs.push_back(new Call(c.loc(),
+                                 "index_set_" + std::__1::to_string(idxs.size()) + "of" +
+                                 std::__1::to_string(idxs.size()), idxArgs));
+      plusExpr = new BinOp(c.loc(),
+                           plusExpr,
+                           BOT_PLUS,
+                           new BinOp(c.loc(),
+                                     idxs[idxs.size() - 1],
+                                     BOT_MINUS,
+                                     new Call(c.loc(), "min", minArgs)));
       return plusExpr;
     }
 
@@ -322,15 +333,16 @@ namespace MiniZinc {
   class FromGatherer {
   private:
     Expression *_ensure;
-    Expression *_where;
+    //Expression *_where;
+    std::vector<Expression*> _wheres;
     std::vector<VarDecl *> _iteratorVars;
     Expression *_moves;
-
     Comprehension *_origC;
+    EnvI &env;
   protected:
 
   public:
-    FromGatherer(Comprehension &c) : _origC(&c) {
+    FromGatherer(Comprehension &c, EnvI &e) : _origC(&c), env(e) {
       for (int i = 0; i < c.n_generators(); ++i) {
         for (int j = 0; j < c.n_decls(i); ++j) {
           const VarDecl *oldVar = c.decl(i, j);
@@ -340,7 +352,38 @@ namespace MiniZinc {
           _iteratorVars.push_back(newVar);
         }
       }
-      _where = c.where(0);
+      
+      
+      for (int i=0; i<c.n_generators(); i++) {
+        if(c.where(i)){
+          _wheres.push_back(c.where(i));
+        }
+      }
+      
+      /*std::vector<Expression*> whereParts;
+      
+      for (int i=0; i<c.n_generators(); i++) {
+        if(c.where(i)){
+          whereParts.push_back(c.where(i));
+        }
+      }
+      std::vector<Expression*> forall_args(1);
+      forall_args[0] = new ArrayLit(c.loc(),whereParts);
+      
+      Call* forall_where = new Call(c.loc(), constants().ids.forall, forall_args);
+      forall_where->type(Type::varbool());
+      forall_where->decl(env.orig->matchFn(env, forall_where, false));
+      std::cerr << "does this fix things?" << std::endl;
+      std::cerr << *forall_where << std::endl;
+       */
+      
+      // Just keep a list of all where and add them further down.
+      // Just remember to add the annotation
+      
+      
+      //_where = forall_where; //c.where(0);
+      
+      
       CallFinder *ensureFinder = new CallFinder();
       ensureFinder->find(LSConstants::ENSURE, c.e());
       assert((ensureFinder->getFoundCalls().size() <= 1) && "Found multiple ensures in a neighbourhood.");
@@ -365,7 +408,7 @@ namespace MiniZinc {
       std::cerr << "   Done replacing moves" << std::endl;
     }
 
-    Let &getLetExpression(EnvI &env, FunctionI *fi, std::string neighbourhoodName) {
+    Let &getLetExpression(FunctionI *fi, std::string neighbourhoodName) {
 
       Expression *trueLit = constants().lit_true;
 
@@ -386,10 +429,17 @@ namespace MiniZinc {
         }
         whereList.insert(std::end(whereList), std::begin(_iteratorVars), std::end(_iteratorVars));
       }
+      
+      for (auto itr = _wheres.begin(); itr != _wheres.end(); ++itr) {
+        (*itr)->addAnnotation(constants().ann.ls_pre_condition);
+        whereList.push_back((*itr));
+      }
+      /*
       if (_where) {
         _where->addAnnotation(constants().ann.ls_pre_condition);
         whereList.push_back(_where);
       }
+       */
 
       //Construct nested lets
 
@@ -441,7 +491,10 @@ namespace MiniZinc {
       for (auto itr = _iteratorVars.begin(); itr != _iteratorVars.end(); ++itr) {
         std::cerr << "\t\t" << *(*itr) << std::endl;
       }
-      std::cerr << "\tWhere: " << *_where << std::endl;
+      std::cerr << "\tWheres: " << std::endl;
+      for (auto itr = _wheres.begin(); itr != _wheres.end(); ++itr) {
+        std::cerr << "\t\t" << *(*itr) << std::endl;
+      }
       std::cerr << "\tEnsure: " << *_ensure << std::endl;
       std::cerr << "\tMoves: " << *_moves << std::endl;
       std::cerr << "Debug end:" << std::endl;
@@ -485,10 +538,10 @@ namespace MiniZinc {
 
         std::vector<Expression *> froms;
         for (auto fromItr = foundCalls.begin(); fromItr != foundCalls.end(); ++fromItr) {
-          FromGatherer _g(*(((*fromItr)->args()[0])->dyn_cast<Comprehension>()));
+          FromGatherer _g(*(((*fromItr)->args()[0])->dyn_cast<Comprehension>()),env);
           _g.debug();
 
-          Expression *fromBody = &(_g.getLetExpression(env, fi, fi->id().str() + "_FROM_" + std::to_string(i)));
+          Expression *fromBody = &(_g.getLetExpression(fi, fi->id().str() + "_FROM_" + std::to_string(i)));
 
 
           /*FunctionI *fromFunction = env.create_function(vAnn, fi->id().str() + "_FROM_" + std::to_string(i),
