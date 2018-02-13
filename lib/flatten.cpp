@@ -240,7 +240,7 @@ namespace MiniZinc {
     exprMap.pop_back();
   }
   void EnvI::setFlatFunctionMode(bool b){
-   flatFunctionMode = b
+    flatFunctionMode = b;
   }
   bool is_a_lit(Expression* e){
     return e->isa<ArrayLit>()||
