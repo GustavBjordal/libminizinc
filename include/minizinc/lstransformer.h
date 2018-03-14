@@ -54,9 +54,6 @@ namespace MiniZinc {
                                            std::vector<Expression *> &callArgs) {
       FunctionI *function = env.create_function(returnType, name, funcParam, body);
       function->ann().add(constants().ann.flat_function);
-      
-      std::cerr << "Created new function " << name << " - " << *body << " - " << *function <<std::endl;
-      
       return new Call(loc, function->id().str(), callArgs, function);
     }
     
@@ -69,13 +66,6 @@ namespace MiniZinc {
                                            std::vector<Expression *> &callArgs) {
 
       Let *functionBody = new Let(loc, body, returnE);
-      std::cerr << "Created new function " << name << " - " << *returnE <<std::endl;
-      
-      for (auto itr = body.begin(); itr != body.end(); ++itr) {
-        std::cerr << **itr << std::endl;
-      }
-      std::cerr << "Function body" <<*functionBody << std::endl;
-      
       return createFlatFunctionAndCall(env, returnType, loc, name, funcParam, functionBody, callArgs);
     }
   };
@@ -378,10 +368,11 @@ namespace MiniZinc {
         _moves = c.e();
       }
 
-      std::cerr << "   Replacing moves" << std::endl;
+
+      // Replace moves with annotations
+      
       OpReplacer m;
       TopDownIterator<OpReplacer>(m).run(_moves);
-      std::cerr << "   Done replacing moves" << std::endl;
     }
 
     Let &getLetExpression(FunctionI *fi, std::string neighbourhoodName) {
@@ -505,7 +496,7 @@ namespace MiniZinc {
         std::vector<Expression *> froms;
         for (auto fromItr = foundCalls.begin(); fromItr != foundCalls.end(); ++fromItr) {
           FromGatherer _g(*(((*fromItr)->args()[0])->dyn_cast<Comprehension>()),env);
-          _g.debug();
+          //_g.debug();
 
           Expression *fromBody = &(_g.getLetExpression(fi, fi->id().str() + "_FROM_" + std::to_string(i)));
 
@@ -522,13 +513,13 @@ namespace MiniZinc {
 
         std::vector<Expression *> nDeclArgs;
         nDeclArgs.push_back(new ArrayLit(fi->loc(), froms));
+        
         if (init) {
-          std::cerr << "Has init" << *init << std::endl;
-          
           Type vAnn = Type::ann();
           std::vector<Expression*> initBody(0);
-          std::cerr << "Arg is" << *init->args()[0] << std::endl;
           initBody.push_back(init->args()[0]);
+          
+          // Create new init function:
           Call *initCall = LSTransformation::createFlatFunctionAndCall(env,
                                                                        vAnn,
                                                                        fi->loc(),
@@ -536,8 +527,6 @@ namespace MiniZinc {
                                                                        fromFuncParam,
                                                                        initBody,
                                                                        constants().ann.ls_dummy, callFromArgs);
-          std::cerr << "Created new call" << *initCall << std::endl;
-          std::cerr << "Created new Function" << *initCall->decl() << std::endl;
           std::vector<Expression*> newInitArgs(1);
           newInitArgs[0] = initCall;
           init->args(newInitArgs);
@@ -546,7 +535,6 @@ namespace MiniZinc {
         Call *neighbourhoodDeclaration = new Call(fi->loc(), LSConstants::NEIGHBOURHOOD_DECL, nDeclArgs);
         fi->e(neighbourhoodDeclaration);
         fi->ann().add(constants().ann.flat_function);
-        std::cerr << "Done" << std::endl;
       }
     }
   };
@@ -556,10 +544,12 @@ namespace MiniZinc {
     LSTranslate _lst(e.envi());
     iterItems<LSTranslate>(_lst, e.model());
 
+    /*
     Printer p(std::cerr, 200);
     std::cerr << "---------------Printing model" << std::endl;
     p.print(e.envi().orig);
     std::cerr << "-------------Printing model done" << std::endl;
+     */
   }
 };
 

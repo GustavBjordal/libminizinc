@@ -4772,7 +4772,7 @@ namespace MiniZinc {
 
         //Gustav's new stuff - stop compilation of calls
         if(decl->ann().contains(constants().ann.flat_function)){
-          std::cerr << "Postponing flattening of flat function: " << c->id() << std::endl;
+          //std::cerr << "Postponing flattening of flat function: " << c->id() << std::endl;
           std::vector<EE> args_ee(c->args().size());
           for (unsigned int i=c->args().size(); i--;) {
             Ctx argctx = nctx;
@@ -4810,9 +4810,6 @@ namespace MiniZinc {
           
           env.addFlatCall(cr_c, c);
           return ret;
-        }
-        if(c->id().str() == "assign_array"){
-          std::cerr << c->id() << std::endl;
         }
 
         if (decl->e()==NULL) {
@@ -6757,7 +6754,7 @@ namespace MiniZinc {
     Ctx c = ctx;
     c.b = BCtx::C_POS;
     EE result = flat_exp(env, Ctx(), call, NULL, NULL);
-        
+    
     int newSize = env.flat()->size();
     std::vector<Expression*> letBody;
     for (int i = originalSize; i < env.flat()->size(); i++) {
@@ -6769,13 +6766,12 @@ namespace MiniZinc {
       }else{
         std::cerr << "Something is wrong with the function" << std::endl;
       }
+      // Remove introduced item from flatzinc
       itm->remove();
     }
     
     env.pop_expr_map();
-    std::cerr << "Removed arguments from function definition" << std::endl;
     ASTExprVec<VarDecl> noParams;
-    
     return new FunctionI(loc,callName, type, noParams, new Let(loc, letBody, result.r()));
   }
   
@@ -6796,9 +6792,7 @@ namespace MiniZinc {
         //targetCallDecl->ann().remove(constants().ann.flat_function);
 
         ASTExprVec<VarDecl> params =  targetCallDecl->params();
-        std::cerr << "Creating Flat function for: " << *targetCall << std::endl;
-        std::cerr << "Old function declaration:" << std::endl;
-        
+        // Creating Flat function for:  *targetCall
         FunctionI* tmpFunction = new FunctionI(targetCallDecl->loc(),
                                                      "FUN_INTRODUCED_" + std::to_string(callNumber) + "_" +
                                                        targetCallDecl->id().str(),
@@ -6813,11 +6807,8 @@ namespace MiniZinc {
         FunctionI* newFunction = create_flat_function_from_call(e, ctx, tmpFunction->loc(), tmpFunction->ti(), params, tmpFunction->id().str(), tmpCall);
         newFunctions.push_back(newFunction);
         targetCall->id(newFunction->id());
-        std::cerr << "New function declaration:" << std::endl;
-        p.print(newFunction);
-        std::cerr << "Removing arguments from function call" << std::endl;
+        // Removing arguments from function call
         targetCall->args(NULL);
-        std::cerr << std::endl;
         
       }
       //Remove new flatzinc stuff
@@ -6831,8 +6822,8 @@ namespace MiniZinc {
       }
     }
     
-    std:: cerr << ("----------- Done adding flat functions ---------------") << std::endl;
-    p.print(env.flat());
-    std:: cerr << ("----------- Done printing flat model ---------------") << std::endl;
+    //std::cerr << ("----------- Done adding flat functions ---------------") << std::endl;
+    //p.print(env.flat());
+    //std::cerr << ("----------- Done printing flat model ---------------") << std::endl;
   }
 }
