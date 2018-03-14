@@ -11,7 +11,7 @@ array [ITEMS] of int: size;
 array [ITEMS] of COLORS: color;
 int: maxCapa = max(capacities);
 
-array [BINS] of var 0..200: load;
+array [BINS] of var 0..maxCapa: load;
 array [ITEMS] of var BINS: placed_in;
 constraint bin_packing_load(load,placed_in,size);
 
@@ -22,11 +22,10 @@ constraint forall(b in BINS, c in COLORS)(
 );
 
 % constraint forall(i in ITEMS)(
-%   contains_color[color[i],placed_in[i]] = true
+%   contains_color[placed_in[i],color[i]] = true
 % );
 
-array [BINS] of var int: num_colors =
-	[sum([contains_color[b,c] | c in COLORS]) | b in BINS];
+array [BINS] of var int: num_colors =	[sum([contains_color[b,c] | c in COLORS]) | b in BINS];
 constraint forall(b in BINS)(num_colors[b] <= 2);
 
 array[1..maxCapa+1] of 0..maxCapa: slack =
@@ -43,13 +42,14 @@ minimize objective;
 
 
 
-nItems =50;
+nItems =111;
 ITEMS = 1..nItems;
 BINS = 1..nItems;
 COLORS = 1..max(privateColor);
 CAPACITIES  = 1..20;
 
-capacities = [12, 14, 17, 18, 19, 20, 23, 24, 25, 26, 27, 28, 29, 30, 32, 35, 39, 42, 43, 44];
+capacities = %[10,37,48];
+  [12, 14, 17, 18, 19, 20, 23, 24, 25, 26, 27, 28, 29, 30, 32, 35, 39, 42, 43, 44];
 size = [privateSize[i] | i in ITEMS];
 color = [privateColor[i] | i in ITEMS];
 
