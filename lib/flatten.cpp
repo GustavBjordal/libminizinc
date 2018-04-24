@@ -384,7 +384,7 @@ namespace MiniZinc {
     i->remove();
   }
   void EnvI::flat_removeItem(int i) {
-    (*_flat)[i]->remove();
+    flat_removeItem((*_flat)[i]);
   }
   
   void EnvI::fail(void) {
@@ -6767,7 +6767,8 @@ namespace MiniZinc {
         std::cerr << "Something is wrong with the function" << std::endl;
       }
       // Remove introduced item from flatzinc
-      itm->remove();
+      //itm->remove();
+      env.flat_removeItem(itm);
     }
     
     env.pop_expr_map();
