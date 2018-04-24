@@ -1657,7 +1657,7 @@ namespace MiniZinc {
         Id* user_cut;            // MIP
         Id* lazy_constraint;            // MIP
         Id* new_constraint_context;
-        Id* neighbourhood_definition;
+        Id* neighborhood_definition;
         Id* flat_function;
         Id* ann_void;
         Id* initially;

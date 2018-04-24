@@ -25,15 +25,15 @@
 namespace MiniZinc {
 
   namespace LSConstants {
-    static constexpr const char *AND = "neighbourhood_and";
+    static constexpr const char *AND = "neighborhood_and";
     static constexpr const char *POSTCOND = "ensuring";
     static constexpr const char *PRECOND = "where";
     static constexpr const char *MOVES = "moves";
     static constexpr const char *INITIALLY = "initially";
     static constexpr const char *DEFINES_GENERATOR = "defines_generator";
-    static constexpr const char *NEIGHBOURHOOD_DEFINITION = "neighbourhood_definition";
+    static constexpr const char *NEIGHBORHOOD_DEFINITION = "neighborhood_definition";
     static constexpr const char *VOID = "void";
-    static constexpr const char *NEIGHBOURHOOD_DECL = "neighbourhood_declaration";
+    static constexpr const char *NEIGHBORHOOD_DECL = "neighborhood_declaration";
     static constexpr const char *ASSIGN_OP = "':='";
     static constexpr const char *SWAP_OP = "':=:'";
     static constexpr const char *ASSIGN = "assign";
@@ -224,17 +224,17 @@ namespace MiniZinc {
   };
 
 
-  class NeighbourhoodAndInitExtracter : public EVisitor {
+  class NeighborhoodAndInitExtracter : public EVisitor {
   private:
-    std::vector<Call *> _neighbourhoods;
+    std::vector<Call *> _neighborhoods;
     Call *_init;
 
   public:
-    NeighbourhoodAndInitExtracter() : _init(NULL) {}
+    NeighborhoodAndInitExtracter() : _init(NULL) {}
 
   public:
-    const std::vector<Call *> &get_neighbourhoods() const {
-      return _neighbourhoods;
+    const std::vector<Call *> &get_neighborhoods() const {
+      return _neighborhoods;
     }
 
     Call *get_init() const {
@@ -246,16 +246,16 @@ namespace MiniZinc {
     
     /// Visit binary operator
     void vBinOp(const BinOp &b) {
-      if (b.op() != BinOpType::BOT_OR && b.op() != BinOpType::BOT_AND) {
-        throw new SyntaxError(b.loc(), "Other binop than OR or AND found.");
+      if (b.op() != BinOpType::BOT_UNION && b.op() != BinOpType::BOT_AND) {
+        throw new SyntaxError(b.loc(), "Other binop than union or AND found.");
       }
-      if (b.op() == BinOpType::BOT_OR) {
+      if (b.op() == BinOpType::BOT_UNION) {
         bool lhsCall = b.lhs()->isa<Call>();
         bool rhsCall = b.rhs()->isa<Call>();
         if (lhsCall && b.lhs()->dyn_cast<Call>()->id().str() == LSConstants::INITIALLY) {
-          throw new SyntaxError(b.loc(), "Found initialization statement in OR");
+          throw new SyntaxError(b.loc(), "Found initialization statement in union");
         } else if (rhsCall && b.rhs()->dyn_cast<Call>()->id().str() == LSConstants::INITIALLY) {
-          throw new SyntaxError(b.loc(), "Found initialization statement in OR");
+          throw new SyntaxError(b.loc(), "Found initialization statement in union");
         }
       }
       if (b.op() == BinOpType::BOT_AND) {
@@ -263,7 +263,7 @@ namespace MiniZinc {
         bool rhsCall = b.rhs()->isa<Call>();
         if (lhsCall && b.lhs()->dyn_cast<Call>()->id().str() == LSConstants::INITIALLY && rhsCall &&
             b.rhs()->dyn_cast<Call>()->id().str() == LSConstants::INITIALLY) {
-          throw new SyntaxError(b.loc(), "Too many initially statements in neighbourhood declaration.");
+          throw new SyntaxError(b.loc(), "Too many initially statements in neighborhood declaration.");
         } else if (lhsCall && b.lhs()->dyn_cast<Call>()->id().str() == LSConstants::INITIALLY) {
           return;
         } else if (rhsCall && b.rhs()->dyn_cast<Call>()->id().str() == LSConstants::INITIALLY) {
@@ -292,7 +292,7 @@ namespace MiniZinc {
     bool enter(Expression *e) {
       if (e->isa<BinOp>()) {
         auto b = e->dyn_cast<BinOp>();
-        if (b->op() != BinOpType::BOT_OR && b->op() != BinOpType::BOT_AND) {
+        if (b->op() != BinOpType::BOT_UNION && b->op() != BinOpType::BOT_AND) {
           return false;
         }
         return true;
@@ -300,15 +300,15 @@ namespace MiniZinc {
       if (e->isa<Call>()) {
         std::string id = e->dyn_cast<Call>()->id().str();
         if (id == LSConstants::MOVES) {
-          _neighbourhoods.push_back(e->dyn_cast<Call>());
+          _neighborhoods.push_back(e->dyn_cast<Call>());
         } else if (id == LSConstants::INITIALLY) {
           if (!_init) {
             _init = (e->dyn_cast<Call>());
           } else {
-            throw new SyntaxError(e->loc(), "Too many initially statements in neighbourhood declaration.");
+            throw new SyntaxError(e->loc(), "Too many initially statements in neighborhood declaration.");
           }
         } else {
-          throw new SyntaxError(e->loc(), "Unexpected call to " + id + "in neighbourhood declaration.");
+          throw new SyntaxError(e->loc(), "Unexpected call to " + id + "in neighborhood declaration.");
         }
 
         /*if((e->dyn_cast<Call>()->id().str() == LSConstants::MOVES) || (e->dyn_cast<Call>()->id().str() == LSConstants::INITIALLY)){
@@ -320,7 +320,7 @@ namespace MiniZinc {
 
   };
 
-  class NeighbourhoodGatherer {
+  class NeighborhoodGatherer {
   private:
     Expression *_postcond;
     std::vector<Expression*> _preconds;
@@ -331,7 +331,7 @@ namespace MiniZinc {
   protected:
 
   public:
-    NeighbourhoodGatherer(Comprehension &c, EnvI &e) : _origC(&c), env(e) {
+    NeighborhoodGatherer(Comprehension &c, EnvI &e) : _origC(&c), env(e) {
       for (int i = 0; i < c.n_generators(); ++i) {
         for (int j = 0; j < c.n_decls(i); ++j) {
           const VarDecl *oldVar = c.decl(i, j);
@@ -351,7 +351,7 @@ namespace MiniZinc {
       
       CallFinder *postcondFinder = new CallFinder();
       postcondFinder->find(LSConstants::POSTCOND, c.e());
-      assert((postcondFinder->getFoundCalls().size() <= 1) && "Found multiple ensuring in a neighbourhood.");
+      assert((postcondFinder->getFoundCalls().size() <= 1) && "Found multiple ensuring in a neighborhood.");
       if (postcondFinder->getFoundCalls().size() == 1) {
         _postcond = postcondFinder->getFoundCalls()[0]->args()[0];
       } else {
@@ -374,7 +374,7 @@ namespace MiniZinc {
       TopDownIterator<OpReplacer>(m).run(_moves);
     }
 
-    Let &getLetExpression(FunctionI *fi, std::string neighbourhoodName) {
+    Let &getLetExpression(FunctionI *fi, std::string neighborhoodName) {
 
       Expression *trueLit = constants().lit_true;
 
@@ -428,7 +428,7 @@ namespace MiniZinc {
       Call *postcondCall = LSTransformation::createFlatFunctionAndCall(env,
                                                                      vBool,
                                                                      _origC->loc(),
-                                                                     neighbourhoodName + "_" + LSConstants::POSTCOND,
+                                                                     neighborhoodName + "_" + LSConstants::POSTCOND,
                                                                      postcondFuncParam, postcondLet, callPostcondArgs);
 
       std::vector<Expression *> callReturnAnnArgs;
@@ -436,9 +436,9 @@ namespace MiniZinc {
 
       BinOp *returnAnn = new BinOp(_origC->loc(), _moves, BinOpType::BOT_AND,
                                    new Call(_origC->loc(), LSConstants::POSTCOND, callReturnAnnArgs));
-      Let *neighbourhoodLet = new Let(_origC->loc(), precondList, returnAnn);
+      Let *neighborhoodLet = new Let(_origC->loc(), precondList, returnAnn);
 
-      return *neighbourhoodLet;
+      return *neighborhoodLet;
     }
 
     void debug() {
@@ -465,53 +465,53 @@ namespace MiniZinc {
     LSTranslate(EnvI &env0) : env(env0) {}
 
     void vFunctionI(FunctionI *fi) {
-      bool defines_neighbourhood = false;
+      bool defines_neighborhood = false;
       for (ExpressionSetIter anns = fi->ann().begin(); anns != fi->ann().end(); ++anns) {
-        if ((*anns)->isa<Id>() && (*anns)->cast<Id>()->v().str() == LSConstants::NEIGHBOURHOOD_DEFINITION)
-          defines_neighbourhood = true;
+        if ((*anns)->isa<Id>() && (*anns)->cast<Id>()->v().str() == LSConstants::NEIGHBORHOOD_DEFINITION)
+          defines_neighborhood = true;
       }
-      if (defines_neighbourhood) {
+      if (defines_neighborhood) {
         Expression *body = fi->e();
 
         Call *init = NULL;
 
-        NeighbourhoodAndInitExtracter _expr;
-        TopDownIterator<NeighbourhoodAndInitExtracter>(_expr).run(body);
+        NeighborhoodAndInitExtracter _expr;
+        TopDownIterator<NeighborhoodAndInitExtracter>(_expr).run(body);
 
         init = _expr.get_init();
         int i = 0;
-        auto foundCalls = _expr.get_neighbourhoods();
+        auto foundCalls = _expr.get_neighborhoods();
 
 
-        std::vector<Expression *> callNeighbourhoodArgs;
-        std::vector<VarDecl *> neighbourhoodFuncParam;
+        std::vector<Expression *> callNeighborhoodArgs;
+        std::vector<VarDecl *> neighborhoodFuncParam;
         //Add function parameters to function and call
         for (auto paramItr = fi->params().begin(); paramItr != fi->params().end(); ++paramItr) {
-          neighbourhoodFuncParam.push_back(*paramItr);
-          callNeighbourhoodArgs.push_back((*paramItr)->id());
+          neighborhoodFuncParam.push_back(*paramItr);
+          callNeighborhoodArgs.push_back((*paramItr)->id());
         }
         Type vAnn = Type::ann();
 
-        std::vector<Expression *> neighbourhoods;
+        std::vector<Expression *> neighborhoods;
         for (auto nItr = foundCalls.begin(); nItr != foundCalls.end(); ++nItr) {
-          NeighbourhoodGatherer _g(*(((*nItr)->args()[0])->dyn_cast<Comprehension>()),env);
+          NeighborhoodGatherer _g(*(((*nItr)->args()[0])->dyn_cast<Comprehension>()),env);
           //_g.debug();
 
-          Expression *neighbourhoodBody = &(_g.getLetExpression(fi, fi->id().str() + "_"+LSConstants::MOVES+"_" + std::to_string(i)));
+          Expression *neighborhoodBody = &(_g.getLetExpression(fi, fi->id().str() + "_"+LSConstants::MOVES+"_" + std::to_string(i)));
 
-          Call *neighbourhoodCall = LSTransformation::createFlatFunctionAndCall(env,
+          Call *neighborhoodCall = LSTransformation::createFlatFunctionAndCall(env,
                                                                        vAnn,
                                                                        fi->loc(),
                                                                        fi->id().str() + "_"+LSConstants::MOVES+"_" + std::to_string(i),
-                                                                       neighbourhoodFuncParam,
-                                                                       neighbourhoodBody, callNeighbourhoodArgs);
+                                                                       neighborhoodFuncParam,
+                                                                       neighborhoodBody, callNeighborhoodArgs);
 
-          neighbourhoods.push_back(neighbourhoodCall);
+          neighborhoods.push_back(neighborhoodCall);
           i++;
         }
 
         std::vector<Expression *> nDeclArgs;
-        nDeclArgs.push_back(new ArrayLit(fi->loc(), neighbourhoods));
+        nDeclArgs.push_back(new ArrayLit(fi->loc(), neighborhoods));
         
         if (init) {
           Type vAnn = Type::ann();
@@ -523,16 +523,16 @@ namespace MiniZinc {
                                                                        vAnn,
                                                                        fi->loc(),
                                                                        fi->id().str() + "_" + LSConstants::INITIALLY,
-                                                                       neighbourhoodFuncParam,
+                                                                       neighborhoodFuncParam,
                                                                        initBody,
-                                                                       constants().ann.ann_void, callNeighbourhoodArgs);
+                                                                       constants().ann.ann_void, callNeighborhoodArgs);
           std::vector<Expression*> newInitArgs(1);
           newInitArgs[0] = initCall;
           init->args(newInitArgs);
           nDeclArgs.push_back(init);
         }
-        Call *neighbourhoodDeclaration = new Call(fi->loc(), LSConstants::NEIGHBOURHOOD_DECL, nDeclArgs);
-        fi->e(neighbourhoodDeclaration);
+        Call *neighborhoodDeclaration = new Call(fi->loc(), LSConstants::NEIGHBORHOOD_DECL, nDeclArgs);
+        fi->e(neighborhoodDeclaration);
         fi->ann().add(constants().ann.flat_function);
       }
     }

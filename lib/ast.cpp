@@ -1246,8 +1246,8 @@ namespace MiniZinc {
     ann.lazy_constraint->type(Type::ann());
     ann.new_constraint_context =  new Id(Location(), ASTString("new_constraint_context"), NULL);
     ann.new_constraint_context->type(Type::ann());
-    ann.neighbourhood_definition =  new Id(Location(), ASTString("neighbourhood_definition"), NULL);
-    ann.neighbourhood_definition->type(Type::ann());
+    ann.neighborhood_definition =  new Id(Location(), ASTString("neighborhood_definition"), NULL);
+    ann.neighborhood_definition->type(Type::ann());
     ann.flat_function =  new Id(Location(), ASTString("flat_function"), NULL);
     ann.flat_function->type(Type::ann());
     ann.ann_void =  new Id(Location(), ASTString("void"), NULL);
@@ -1457,7 +1457,7 @@ namespace MiniZinc {
     v.push_back(ann.lazy_constraint);
 
     v.push_back(ann.new_constraint_context);
-    v.push_back(ann.neighbourhood_definition);
+    v.push_back(ann.neighborhood_definition);
     v.push_back(ann.flat_function);
     v.push_back(ann.ann_void);
     v.push_back(ann.defines_generator);
