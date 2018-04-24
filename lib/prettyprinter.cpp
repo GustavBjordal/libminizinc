@@ -587,14 +587,17 @@ namespace MiniZinc {
         {
           const Let& l = *e->cast<Let>();
           os << "let {";
-
-          for (unsigned int i = 0; i < l.let().size(); i++) {
-            const Expression* li = l.let()[i];
-            if (!li->isa<VarDecl>())
-              os << "constraint ";
-            p(li);
-            if (i<l.let().size()-1)
-              os << ", ";
+          if(l.let().size() >0){
+            os << "\n";
+            for (unsigned int i = 0; i < l.let().size(); i++) {
+              const Expression* li = l.let()[i];
+              os << "\t";
+              if (!li->isa<VarDecl>())
+                os << "constraint ";
+              p(li);
+              //if (i<l.let().size()-1)
+              os << ";\n";
+            }
           }
           os << "} in (";
           p(l.in());
