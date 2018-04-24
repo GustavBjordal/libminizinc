@@ -1659,11 +1659,11 @@ namespace MiniZinc {
         Id* new_constraint_context;
         Id* neighbourhood_definition;
         Id* flat_function;
-        Id* ls_dummy;
-        Id* ls_initialize;
-        Id* ls_defines_generator;
-        Id* ls_pre_condition;
-        Id* ls_post_condition;
+        Id* ann_void;
+        Id* initially;
+        Id* defines_generator;
+        Id* pre_condition;
+        Id* post_condition;
       } ann;
 
       /// Command line options

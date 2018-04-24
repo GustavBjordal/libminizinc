@@ -1250,14 +1250,14 @@ namespace MiniZinc {
     ann.neighbourhood_definition->type(Type::ann());
     ann.flat_function =  new Id(Location(), ASTString("flat_function"), NULL);
     ann.flat_function->type(Type::ann());
-    ann.ls_dummy =  new Id(Location(), ASTString("ls_dummy"), NULL);
-    ann.ls_dummy->type(Type::ann());
-    ann.ls_defines_generator =  new Id(Location(), ASTString("ls_defines_generator"), NULL);
-    ann.ls_defines_generator->type(Type::ann());
-    ann.ls_pre_condition =  new Id(Location(), ASTString("ls_pre_condition"), NULL);
-    ann.ls_pre_condition->type(Type::ann());
-    ann.ls_post_condition =  new Id(Location(), ASTString("ls_post_condition"), NULL);
-    ann.ls_post_condition->type(Type::ann());
+    ann.ann_void =  new Id(Location(), ASTString("void"), NULL);
+    ann.ann_void->type(Type::ann());
+    ann.defines_generator =  new Id(Location(), ASTString("defines_generator"), NULL);
+    ann.defines_generator->type(Type::ann());
+    ann.pre_condition =  new Id(Location(), ASTString("pre_condition"), NULL);
+    ann.pre_condition->type(Type::ann());
+    ann.post_condition =  new Id(Location(), ASTString("post_condition"), NULL);
+    ann.post_condition->type(Type::ann());
     
     var_redef = new FunctionI(Location(),"__internal_var_redef",new TypeInst(Location(),Type::varbool()),
                               std::vector<VarDecl*>());
@@ -1459,10 +1459,10 @@ namespace MiniZinc {
     v.push_back(ann.new_constraint_context);
     v.push_back(ann.neighbourhood_definition);
     v.push_back(ann.flat_function);
-    v.push_back(ann.ls_dummy);
-    v.push_back(ann.ls_defines_generator);
-    v.push_back(ann.ls_post_condition);
-    v.push_back(ann.ls_pre_condition);
+    v.push_back(ann.ann_void);
+    v.push_back(ann.defines_generator);
+    v.push_back(ann.post_condition);
+    v.push_back(ann.pre_condition);
     
     v.push_back(new StringLit(Location(),cli.cmdlineData_short_str));
     v.push_back(new StringLit(Location(),cli.cmdlineData_str));
