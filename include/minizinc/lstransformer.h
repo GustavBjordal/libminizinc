@@ -199,9 +199,10 @@ namespace MiniZinc {
         
         for (int j = i+1; j < idxs.size(); ++j) {
           std::__1::vector<Expression *> cardArgs;
-          cardArgs.push_back(new Call(c.loc(),
-                                      "index_set_" + std::__1::to_string(j + 1) + "of" +
-                                      std::__1::to_string(idxs.size()), idxArgs));
+          Call* callArg = new Call(c.loc(),
+                                   "index_set_" + std::__1::to_string(j + 1) + "of" +
+                                   std::__1::to_string(idxs.size()), idxArgs);
+          cardArgs.push_back(callArg);
           multExpr = new BinOp(c.loc(), multExpr, BOT_MULT,
                                new Call(c.loc(), "card", cardArgs));
         }

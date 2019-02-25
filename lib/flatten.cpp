@@ -4807,7 +4807,6 @@ namespace MiniZinc {
           Call* cr_c = cr()->cast<Call>();
           ret.b = conj(env,b,Ctx(),args_ee);
           ret.r = bind(env,ctx,r,cr_c);
-          
           env.addFlatCall(cr_c, c);
           return ret;
         }

@@ -31,9 +31,13 @@ constraint bin_packing_load(load,placed_in,size);
 % 	[sum([contains_color[b,c] | c in COLORS]) | b in BINS];
 % constraint forall(b in BINS)(num_colors[b] <= 2);
 
-int: maxColors = 2;
-array[BINS] of var 0..maxColors: num_colors;
-constraint forall(b in BINS)(num_colors[b] = nvalue([(placed_in[i] = b)*color[i] | i in ITEMS])-1);
+ int: maxColors = 2;
+ array[BINS] of var 0..maxColors: num_colors;
+% constraint forall(b in BINS)(num_colors[b] = nvalue([(placed_in[i] = b)*color[i] | i in ITEMS])-1);
+
+constraint forall( b in BINS)(
+  num_colors[b] = sum( [ exists(i in ITEMS where color[i] = c)(placed_in[i] = b) | c in COLORS ]) 
+);
 
 array[0..maxCapa] of 0..maxCapa: slack =
   array1d(0..maxCapa,[min([s | s in capacities++[0] where s >= x]) - x | x in 0..maxCapa]);
